@@ -1,0 +1,250 @@
+-- PROFILES
+CREATE TABLE public.profiles (
+  id uuid PRIMARY KEY,
+  username text NOT NULL,
+  avatar_url text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX profiles_username_lower_idx ON public.profiles (lower(username));
+GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+GRANT ALL ON public.profiles TO service_role;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "profiles readable by authenticated" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "insert own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+CREATE POLICY "update own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- SERVERS
+CREATE TABLE public.servers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  owner_id uuid NOT NULL,
+  invite_code text NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(6), 'hex'),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.servers TO authenticated;
+GRANT ALL ON public.servers TO service_role;
+ALTER TABLE public.servers ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.server_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  role text NOT NULL DEFAULT 'member',
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (server_id, user_id)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.server_members TO authenticated;
+GRANT ALL ON public.server_members TO service_role;
+ALTER TABLE public.server_members ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.server_bans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  banned_by uuid NOT NULL,
+  reason text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (server_id, user_id)
+);
+GRANT SELECT, INSERT, DELETE ON public.server_bans TO authenticated;
+GRANT ALL ON public.server_bans TO service_role;
+ALTER TABLE public.server_bans ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.channels (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  is_restricted boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.channels TO authenticated;
+GRANT ALL ON public.channels TO service_role;
+ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.channel_speakers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id uuid NOT NULL REFERENCES public.channels(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  UNIQUE (channel_id, user_id)
+);
+GRANT SELECT, INSERT, DELETE ON public.channel_speakers TO authenticated;
+GRANT ALL ON public.channel_speakers TO service_role;
+ALTER TABLE public.channel_speakers ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id uuid NOT NULL REFERENCES public.channels(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  content text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, DELETE ON public.messages TO authenticated;
+GRANT ALL ON public.messages TO service_role;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.server_invites (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  invitee_id uuid NOT NULL,
+  inviter_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (server_id, invitee_id)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.server_invites TO authenticated;
+GRANT ALL ON public.server_invites TO service_role;
+ALTER TABLE public.server_invites ENABLE ROW LEVEL SECURITY;
+
+-- HELPER FUNCTIONS
+CREATE OR REPLACE FUNCTION public.is_member(_server uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.server_members WHERE server_id = _server AND user_id = _user);
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_admin(_server uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.server_members WHERE server_id = _server AND user_id = _user AND role IN ('owner','admin'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_owner(_server uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.servers WHERE id = _server AND owner_id = _user);
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_banned(_server uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.server_bans WHERE server_id = _server AND user_id = _user);
+$$;
+
+CREATE OR REPLACE FUNCTION public.channel_server(_channel uuid)
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT server_id FROM public.channels WHERE id = _channel;
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_chat(_channel uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.channels c
+    WHERE c.id = _channel
+      AND public.is_member(c.server_id, _user)
+      AND NOT public.is_banned(c.server_id, _user)
+      AND (
+        c.is_restricted = false
+        OR public.is_admin(c.server_id, _user)
+        OR EXISTS (SELECT 1 FROM public.channel_speakers s WHERE s.channel_id = c.id AND s.user_id = _user)
+      )
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.has_invite(_server uuid, _user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.server_invites WHERE server_id = _server AND invitee_id = _user AND status = 'pending');
+$$;
+
+-- join by invite code (bypasses server visibility)
+CREATE OR REPLACE FUNCTION public.join_server_by_code(_code text)
+RETURNS uuid LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public AS $$
+DECLARE _server uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not signed in'; END IF;
+  SELECT id INTO _server FROM public.servers WHERE invite_code = _code;
+  IF _server IS NULL THEN RAISE EXCEPTION 'Invalid invite code'; END IF;
+  IF public.is_banned(_server, auth.uid()) THEN RAISE EXCEPTION 'You are banned from this server'; END IF;
+  INSERT INTO public.server_members (server_id, user_id, role)
+  VALUES (_server, auth.uid(), 'member')
+  ON CONFLICT (server_id, user_id) DO NOTHING;
+  UPDATE public.server_invites SET status = 'accepted' WHERE server_id = _server AND invitee_id = auth.uid();
+  RETURN _server;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.server_name_by_code(_code text)
+RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT name FROM public.servers WHERE invite_code = _code;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.join_server_by_code(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.server_name_by_code(text) TO authenticated;
+
+-- create server with owner membership + default channel
+CREATE OR REPLACE FUNCTION public.create_server(_name text)
+RETURNS uuid LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public AS $$
+DECLARE _id uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not signed in'; END IF;
+  INSERT INTO public.servers (name, owner_id) VALUES (_name, auth.uid()) RETURNING id INTO _id;
+  INSERT INTO public.server_members (server_id, user_id, role) VALUES (_id, auth.uid(), 'owner');
+  INSERT INTO public.channels (server_id, name) VALUES (_id, 'general');
+  RETURN _id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.create_server(text) TO authenticated;
+
+-- POLICIES
+CREATE POLICY "members see server" ON public.servers FOR SELECT TO authenticated
+  USING (public.is_member(id, auth.uid()) OR public.has_invite(id, auth.uid()));
+CREATE POLICY "owner updates server" ON public.servers FOR UPDATE TO authenticated
+  USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+CREATE POLICY "owner deletes server" ON public.servers FOR DELETE TO authenticated
+  USING (owner_id = auth.uid());
+
+CREATE POLICY "members see members" ON public.server_members FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR public.is_member(server_id, auth.uid()));
+CREATE POLICY "join self" ON public.server_members FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid() AND NOT public.is_banned(server_id, auth.uid()));
+CREATE POLICY "leave or kick" ON public.server_members FOR DELETE TO authenticated
+  USING (user_id = auth.uid() OR (public.is_admin(server_id, auth.uid()) AND NOT public.is_owner(server_id, user_id)));
+CREATE POLICY "owner changes roles" ON public.server_members FOR UPDATE TO authenticated
+  USING (public.is_owner(server_id, auth.uid())) WITH CHECK (public.is_owner(server_id, auth.uid()));
+
+CREATE POLICY "members see bans" ON public.server_bans FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR public.is_member(server_id, auth.uid()));
+CREATE POLICY "admins ban" ON public.server_bans FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin(server_id, auth.uid()) AND NOT public.is_owner(server_id, user_id));
+CREATE POLICY "admins unban" ON public.server_bans FOR DELETE TO authenticated
+  USING (public.is_admin(server_id, auth.uid()));
+
+CREATE POLICY "members see channels" ON public.channels FOR SELECT TO authenticated
+  USING (public.is_member(server_id, auth.uid()));
+CREATE POLICY "admins create channels" ON public.channels FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin(server_id, auth.uid()));
+CREATE POLICY "admins update channels" ON public.channels FOR UPDATE TO authenticated
+  USING (public.is_admin(server_id, auth.uid())) WITH CHECK (public.is_admin(server_id, auth.uid()));
+CREATE POLICY "admins delete channels" ON public.channels FOR DELETE TO authenticated
+  USING (public.is_admin(server_id, auth.uid()));
+
+CREATE POLICY "members see speakers" ON public.channel_speakers FOR SELECT TO authenticated
+  USING (public.is_member(public.channel_server(channel_id), auth.uid()));
+CREATE POLICY "admins add speakers" ON public.channel_speakers FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin(public.channel_server(channel_id), auth.uid()));
+CREATE POLICY "admins remove speakers" ON public.channel_speakers FOR DELETE TO authenticated
+  USING (public.is_admin(public.channel_server(channel_id), auth.uid()));
+
+CREATE POLICY "members read messages" ON public.messages FOR SELECT TO authenticated
+  USING (public.is_member(public.channel_server(channel_id), auth.uid()));
+CREATE POLICY "allowed users post" ON public.messages FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid() AND public.can_chat(channel_id, auth.uid()));
+CREATE POLICY "delete own or admin" ON public.messages FOR DELETE TO authenticated
+  USING (user_id = auth.uid() OR public.is_admin(public.channel_server(channel_id), auth.uid()));
+
+CREATE POLICY "see own invites" ON public.server_invites FOR SELECT TO authenticated
+  USING (invitee_id = auth.uid() OR public.is_member(server_id, auth.uid()));
+CREATE POLICY "members invite" ON public.server_invites FOR INSERT TO authenticated
+  WITH CHECK (inviter_id = auth.uid() AND public.is_member(server_id, auth.uid()));
+CREATE POLICY "invitee updates invite" ON public.server_invites FOR UPDATE TO authenticated
+  USING (invitee_id = auth.uid()) WITH CHECK (invitee_id = auth.uid());
+CREATE POLICY "invitee or admin deletes invite" ON public.server_invites FOR DELETE TO authenticated
+  USING (invitee_id = auth.uid() OR public.is_admin(server_id, auth.uid()));
+
+-- kick members / delete messages when banned
+CREATE OR REPLACE FUNCTION public.remove_member_on_ban()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  DELETE FROM public.server_members WHERE server_id = NEW.server_id AND user_id = NEW.user_id;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_remove_member_on_ban AFTER INSERT ON public.server_bans
+FOR EACH ROW EXECUTE FUNCTION public.remove_member_on_ban();
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
