@@ -8,7 +8,7 @@ export function UserAvatar({
   className,
 }: {
   name: string;
-  url?: string | null;
+  url?: string | null | undefined;
   className?: string;
 }) {
   return (
