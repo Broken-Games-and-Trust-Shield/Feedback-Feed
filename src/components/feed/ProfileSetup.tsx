@@ -57,7 +57,7 @@ export function ProfileSetup({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (first ? null : onOpenChange(v))}>
-      <DialogContent className="sm:max-w-md" showCloseButton={!first}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{first ? "Set up your account" : "Edit your profile"}</DialogTitle>
         </DialogHeader>
