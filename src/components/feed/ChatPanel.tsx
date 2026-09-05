@@ -1,0 +1,162 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Lock, SendHorizonal, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { UserAvatar } from "./UserAvatar";
+import { fetchMessages, fetchProfiles, type Channel, type Profile } from "@/lib/data";
+
+export function ChatPanel({
+  channel,
+  meId,
+  canChat,
+  canModerate,
+}: {
+  channel: Channel;
+  meId: string;
+  canChat: boolean;
+  canModerate: boolean;
+}) {
+  const qc = useQueryClient();
+  const [text, setText] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const messagesQuery = useQuery({
+    queryKey: ["messages", channel.id],
+    queryFn: () => fetchMessages(channel.id),
+  });
+  const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
+
+  const authorIds = useMemo(
+    () => Array.from(new Set(messages.map((m) => m.user_id))),
+    [messages],
+  );
+  const profilesQuery = useQuery({
+    queryKey: ["profiles", authorIds],
+    queryFn: () => fetchProfiles(authorIds),
+    enabled: authorIds.length > 0,
+  });
+  const profiles: Record<string, Profile> = profilesQuery.data ?? {};
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`messages-${channel.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `channel_id=eq.${channel.id}`,
+        },
+        () => qc.invalidateQueries({ queryKey: ["messages", channel.id] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [channel.id, qc]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  const send = useMutation({
+    mutationFn: async (content: string) => {
+      const { error } = await supabase
+        .from("messages")
+        .insert({ channel_id: channel.id, user_id: meId, content });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setText("");
+      qc.invalidateQueries({ queryKey: ["messages", channel.id] });
+    },
+    onError: () => toast.error("Message could not be sent."),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("messages").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["messages", channel.id] }),
+    onError: () => toast.error("Could not delete that message."),
+  });
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
+        {messages.length === 0 ? (
+          <p className="pt-10 text-center text-sm text-muted-foreground">
+            Nothing here yet. Say the first thing.
+          </p>
+        ) : null}
+        {messages.map((m) => {
+          const p = profiles[m.user_id];
+          return (
+            <div key={m.id} className="group flex gap-3">
+              <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-sm font-semibold">{p?.username ?? "Unknown"}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(m.created_at).toLocaleString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  {m.user_id === meId || canModerate ? (
+                    <button
+                      className="ml-auto opacity-0 transition group-hover:opacity-100"
+                      onClick={() => remove.mutate(m.id)}
+                      aria-label="Delete message"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  ) : null}
+                </div>
+                <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
+                  {m.content}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="border-t border-border p-4">
+        {canChat ? (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = text.trim();
+              if (v) send.mutate(v);
+            }}
+          >
+            <Input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={`Message #${channel.name}`}
+              className="bg-surface"
+            />
+            <Button type="submit" size="icon" disabled={send.isPending || !text.trim()}>
+              <SendHorizonal className="h-4 w-4" />
+            </Button>
+          </form>
+        ) : (
+          <div className="flex items-center justify-center gap-2 rounded-lg bg-surface px-4 py-3 text-sm text-muted-foreground">
+            <Lock className="h-4 w-4" />
+            You can read this channel, but only chosen members can post here.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
