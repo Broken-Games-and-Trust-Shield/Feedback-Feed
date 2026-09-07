@@ -36,8 +36,10 @@ export function ProfileSetup({
 }) {
   const [username, setUsername] = useState(profile?.username ?? "");
   const [avatar, setAvatar] = useState<string | null>(profile?.avatar_url ?? null);
+  const [confirmText, setConfirmText] = useState("");
   const qc = useQueryClient();
   const first = !profile;
+  const doDelete = useServerFn(deleteAccount);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -55,6 +57,22 @@ export function ProfileSetup({
       qc.invalidateQueries();
       toast.success("Profile saved");
       onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (confirmText.trim().toLowerCase() !== "delete") {
+        throw new Error("Type delete to confirm.");
+      }
+      await doDelete({});
+      await supabase.auth.signOut();
+    },
+    onSuccess: () => {
+      qc.clear();
+      toast.success("Account deleted");
+      window.location.href = "/";
     },
     onError: (e: Error) => toast.error(e.message),
   });
