@@ -127,6 +127,24 @@ function Landing() {
     else toast.success("Password reset link sent.");
   }
 
+  async function resendConfirmation() {
+    const mail = email.trim();
+    if (!mail) return;
+    setResendBusy(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: mail,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setResendBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setResent(true);
+    toast.success("Confirmation email sent again.");
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden">
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
