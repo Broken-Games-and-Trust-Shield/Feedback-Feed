@@ -60,6 +60,8 @@ function Landing() {
   const [password, setPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [sentConfirm, setSentConfirm] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/app", replace: true });
