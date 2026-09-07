@@ -161,10 +161,21 @@ function Landing() {
             </div>
 
             {sentConfirm ? (
-              <p className="text-sm text-muted-foreground">
-                We sent a confirmation link to {email.trim()}. Open it to finish creating your
-                account, then come back and sign in.
-              </p>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  We sent a confirmation link to {email.trim()}. Open it to finish creating your
+                  account, then come back and sign in.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={resendBusy || resent}
+                  onClick={resendConfirmation}
+                >
+                  {resent ? "Sent again — check your inbox" : resendBusy ? "Sending…" : "Send again"}
+                </Button>
+              </div>
             ) : (
               <form onSubmit={submitEmail} className="space-y-3">
                 <div className="space-y-1">
