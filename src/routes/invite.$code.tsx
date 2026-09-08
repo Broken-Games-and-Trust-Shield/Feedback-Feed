@@ -35,6 +35,7 @@ function InvitePage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   const [sentConfirm, setSentConfirm] = useState(false);
 

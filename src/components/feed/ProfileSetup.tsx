@@ -41,6 +41,17 @@ export function ProfileSetup({
   const first = !profile;
   const deleteAccount = useServerFn(deleteMyAccount);
 
+  const signOut = useMutation({
+    mutationFn: async () => {
+      await supabase.auth.signOut();
+    },
+    onSuccess: () => {
+      qc.clear();
+      window.location.href = "/";
+    },
+    onError: () => toast.error("Could not sign out. Please try again."),
+  });
+
   const removeAccount = useMutation({
     mutationFn: async () => {
       await deleteAccount({} as never);
