@@ -28,6 +28,7 @@ export type Channel = {
   server_id: string;
   name: string;
   is_restricted: boolean;
+  operator_only: boolean;
   created_at: string;
 };
 

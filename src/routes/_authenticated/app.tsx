@@ -137,7 +137,10 @@ function AppPage() {
   });
   const speakers = speakersQuery.data ?? [];
   const canChat =
-    !!channel && (!channel.is_restricted || isAdmin || speakers.some((s) => s.user_id === meId));
+    !!channel &&
+    (!channel.is_restricted ||
+      isAdmin ||
+      (!channel.operator_only && speakers.some((s) => s.user_id === meId)));
 
   if (loading || !user) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
@@ -513,6 +516,18 @@ function ChannelSettings({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const toggleOperatorOnly = useMutation({
+    mutationFn: async (value: boolean) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ operator_only: value })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const toggleSpeaker = useMutation({
     mutationFn: async ({ userId, allow }: { userId: string; allow: boolean }) => {
       if (allow) {
@@ -565,24 +580,47 @@ function ChannelSettings({
           />
         </div>
         {channel.is_restricted ? (
-          <div className="max-h-64 space-y-1 overflow-y-auto">
-            {members.map((id) => (
-              <label
-                key={id}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/30"
-              >
-                <UserAvatar
-                  name={profiles[id]?.username ?? "?"}
-                  url={profiles[id]?.avatar_url ?? null}
-                />
-                <span className="flex-1 truncate text-sm">{profiles[id]?.username ?? "…"}</span>
-                <Switch
-                  checked={speakers.includes(id)}
-                  onCheckedChange={(v) => toggleSpeaker.mutate({ userId: id, allow: v })}
-                />
-              </label>
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+              <div className="pr-3">
+                <p className="text-sm font-medium">Operator mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Only the owner and admins can send messages here.
+                </p>
+              </div>
+              <Switch
+                checked={channel.operator_only}
+                onCheckedChange={(v) => toggleOperatorOnly.mutate(v)}
+              />
+            </div>
+            {channel.operator_only ? (
+              <p className="px-1 text-xs text-muted-foreground">
+                Operator mode is on, so the list below is paused. Turn it off to let specific people
+                post again.
+              </p>
+            ) : (
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {members.map((id) => (
+                  <label
+                    key={id}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/30"
+                  >
+                    <UserAvatar
+                      name={profiles[id]?.username ?? "?"}
+                      url={profiles[id]?.avatar_url ?? null}
+                    />
+                    <span className="flex-1 truncate text-sm">
+                      {profiles[id]?.username ?? "…"}
+                    </span>
+                    <Switch
+                      checked={speakers.includes(id)}
+                      onCheckedChange={(v) => toggleSpeaker.mutate({ userId: id, allow: v })}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+          </>
         ) : null}
         <Button variant="destructive" onClick={() => deleteChannel.mutate()}>
           Delete channel

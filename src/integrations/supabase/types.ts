@@ -46,6 +46,7 @@ export type Database = {
           id: string
           is_restricted: boolean
           name: string
+          operator_only: boolean
           server_id: string
         }
         Insert: {
@@ -53,6 +54,7 @@ export type Database = {
           id?: string
           is_restricted?: boolean
           name: string
+          operator_only?: boolean
           server_id: string
         }
         Update: {
@@ -60,6 +62,7 @@ export type Database = {
           id?: string
           is_restricted?: boolean
           name?: string
+          operator_only?: boolean
           server_id?: string
         }
         Relationships: [
