@@ -95,6 +95,17 @@ export async function fetchChannels(serverId: string) {
   return (data ?? []) as Channel[];
 }
 
+export async function fetchCategories(serverId: string) {
+  const { data, error } = await supabase
+    .from("channel_categories")
+    .select("*")
+    .eq("server_id", serverId)
+    .order("position")
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []) as ChannelCategory[];
+}
+
 export async function fetchMembers(serverId: string) {
   const { data, error } = await supabase
     .from("server_members")
