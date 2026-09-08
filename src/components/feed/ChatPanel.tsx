@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, SendHorizonal, Trash2 } from "lucide-react";
+import { Flag, Lock, SendHorizonal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { UserAvatar } from "./UserAvatar";
+import { ReportDialog } from "./ReportDialog";
 import { fetchMessages, fetchProfiles, type Channel, type Profile } from "@/lib/data";
 
 export function ChatPanel({
@@ -21,6 +28,7 @@ export function ChatPanel({
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const messagesQuery = useQuery({
@@ -97,37 +105,64 @@ export function ChatPanel({
         {messages.map((m) => {
           const p = profiles[m.user_id];
           return (
-            <div key={m.id} className="group flex gap-3">
-              <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold">{p?.username ?? "Unknown"}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(m.created_at).toLocaleString([], {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {m.user_id === meId || canModerate ? (
-                    <button
-                      className="ml-auto opacity-0 transition group-hover:opacity-100"
-                      onClick={() => remove.mutate(m.id)}
-                      aria-label="Delete message"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  ) : null}
+            <ContextMenu key={m.id}>
+              <ContextMenuTrigger asChild>
+                <div className="group flex gap-3">
+                  <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold">{p?.username ?? "Unknown"}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(m.created_at).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {m.user_id === meId || canModerate ? (
+                        <button
+                          className="ml-auto opacity-0 transition group-hover:opacity-100"
+                          onClick={() => remove.mutate(m.id)}
+                          aria-label="Delete message"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
+                      {m.content}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
-                  {m.content}
-                </p>
-              </div>
-            </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                {m.user_id === meId ? (
+                  <ContextMenuItem disabled>That's you</ContextMenuItem>
+                ) : (
+                  <ContextMenuItem
+                    onClick={() =>
+                      setReportTarget({ id: m.user_id, name: p?.username ?? "this member" })
+                    }
+                  >
+                    <Flag className="mr-2 h-4 w-4" /> Report {p?.username ?? "member"}
+                  </ContextMenuItem>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
         <div ref={bottomRef} />
+        {reportTarget ? (
+          <ReportDialog
+            open
+            onOpenChange={(v) => (v ? null : setReportTarget(null))}
+            serverId={channel.server_id}
+            reportedUserId={reportTarget.id}
+            reportedName={reportTarget.name}
+            reporterId={meId}
+          />
+        ) : null}
       </div>
 
       <div className="border-t border-border p-4">

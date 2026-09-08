@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Crown, MoreVertical, ShieldMinus, ShieldPlus, UserMinus } from "lucide-react";
+import { Ban, Crown, Flag, MoreVertical, ShieldMinus, ShieldPlus, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -8,8 +9,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "./UserAvatar";
+import { ReportDialog } from "./ReportDialog";
 import { fetchProfiles, type Member, type Profile, type Server } from "@/lib/data";
 
 type Ban = { id: string; server_id: string; user_id: string; reason: string | null };
@@ -28,6 +36,7 @@ export function MembersPanel({
   isAdmin: boolean;
 }) {
   const qc = useQueryClient();
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
   const ids = members.map((m) => m.user_id);
   const profilesQuery = useQuery({
     queryKey: ["profiles", ids],
@@ -137,57 +146,87 @@ export function MembersPanel({
           const p = profiles[m.user_id];
           const canAct = isAdmin && m.user_id !== meId && m.role !== "owner";
           return (
-            <li
-              key={m.id}
-              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent"
-            >
-              <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} className="h-7 w-7" />
-              <span className="min-w-0 flex-1 truncate text-sm">{p?.username ?? "Unknown"}</span>
-              {m.role === "owner" ? <Crown className="h-3.5 w-3.5 text-primary" /> : null}
-              {m.role === "admin" ? (
-                <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                  mod
-                </span>
-              ) : null}
-              {canAct ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="opacity-0 group-hover:opacity-100" aria-label="Manage member">
-                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {isOwner ? (
-                      m.role === "admin" ? (
-                        <DropdownMenuItem
-                          onClick={() => setRole.mutate({ userId: m.user_id, role: "member" })}
+            <ContextMenu key={m.id}>
+              <ContextMenuTrigger asChild>
+                <li className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
+                  <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} className="h-7 w-7" />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {p?.username ?? "Unknown"}
+                  </span>
+                  {m.role === "owner" ? <Crown className="h-3.5 w-3.5 text-primary" /> : null}
+                  {m.role === "admin" ? (
+                    <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                      mod
+                    </span>
+                  ) : null}
+                  {canAct ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="opacity-0 group-hover:opacity-100"
+                          aria-label="Manage member"
                         >
-                          <ShieldMinus className="mr-2 h-4 w-4" /> Remove moderator
+                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {isOwner ? (
+                          m.role === "admin" ? (
+                            <DropdownMenuItem
+                              onClick={() => setRole.mutate({ userId: m.user_id, role: "member" })}
+                            >
+                              <ShieldMinus className="mr-2 h-4 w-4" /> Remove moderator
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => setRole.mutate({ userId: m.user_id, role: "admin" })}
+                            >
+                              <ShieldPlus className="mr-2 h-4 w-4" /> Make moderator
+                            </DropdownMenuItem>
+                          )
+                        ) : null}
+                        <DropdownMenuItem onClick={() => kick.mutate(m.user_id)}>
+                          <UserMinus className="mr-2 h-4 w-4" /> Remove from server
                         </DropdownMenuItem>
-                      ) : (
                         <DropdownMenuItem
-                          onClick={() => setRole.mutate({ userId: m.user_id, role: "admin" })}
+                          className="text-destructive"
+                          onClick={() => ban.mutate(m.user_id)}
                         >
-                          <ShieldPlus className="mr-2 h-4 w-4" /> Make moderator
+                          <Ban className="mr-2 h-4 w-4" /> Ban
                         </DropdownMenuItem>
-                      )
-                    ) : null}
-                    <DropdownMenuItem onClick={() => kick.mutate(m.user_id)}>
-                      <UserMinus className="mr-2 h-4 w-4" /> Remove from server
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => ban.mutate(m.user_id)}
-                    >
-                      <Ban className="mr-2 h-4 w-4" /> Ban
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </li>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </li>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                {m.user_id === meId ? (
+                  <ContextMenuItem disabled>That's you</ContextMenuItem>
+                ) : (
+                  <ContextMenuItem
+                    onClick={() =>
+                      setReportTarget({ id: m.user_id, name: p?.username ?? "this member" })
+                    }
+                  >
+                    <Flag className="mr-2 h-4 w-4" /> Report {p?.username ?? "member"}
+                  </ContextMenuItem>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </ul>
+
+      {reportTarget ? (
+        <ReportDialog
+          open
+          onOpenChange={(v) => (v ? null : setReportTarget(null))}
+          serverId={server.id}
+          reportedUserId={reportTarget.id}
+          reportedName={reportTarget.name}
+          reporterId={meId}
+        />
+      ) : null}
 
       {isAdmin && bans.length > 0 ? (
         <div className="mt-6">

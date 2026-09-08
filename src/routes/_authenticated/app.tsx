@@ -30,6 +30,7 @@ import { UserAvatar } from "@/components/feed/UserAvatar";
 import { ProfileSetup } from "@/components/feed/ProfileSetup";
 import { ChatPanel } from "@/components/feed/ChatPanel";
 import { MembersPanel } from "@/components/feed/MembersPanel";
+import { ReportsInbox } from "@/components/feed/ReportsInbox";
 import {
   fetchChannels,
   fetchMembers,
@@ -208,6 +209,7 @@ function AppPage() {
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
+                {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
                 <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
               </div>
             </div>
