@@ -110,6 +110,10 @@ export function ChatPanel({
         ) : null}
         {messages.map((m) => {
           const p = profiles[m.user_id];
+          const secondsLeft = Math.ceil(
+            (new Date(m.created_at).getTime() + 30000 - now) / 1000,
+          );
+          const canDelete = m.user_id === meId && secondsLeft > 0;
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
