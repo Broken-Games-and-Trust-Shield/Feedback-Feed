@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useSessionUser } from "@/lib/useSession";
 
 export const Route = createFileRoute("/invite/$code")({
@@ -30,6 +31,41 @@ function InvitePage() {
   const { user, loading } = useSessionUser();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [sentConfirm, setSentConfirm] = useState(false);
+
+  async function submitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    const mail = email.trim();
+    if (!mail || password.length < 6) {
+      toast.error("Enter your email and a password of at least 6 characters.");
+      return;
+    }
+    setEmailBusy(true);
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({
+        email: mail,
+        password,
+        options: { emailRedirectTo: window.location.href },
+      });
+      setEmailBusy(false);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      if (!data.session) {
+        setSentConfirm(true);
+        toast.success("Check your email to confirm your account.");
+      }
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: mail, password });
+    setEmailBusy(false);
+    if (error) toast.error(error.message);
+  }
 
   const nameQuery = useQuery({
     queryKey: ["invite-name", code],
@@ -81,6 +117,54 @@ function InvitePage() {
         >
           {user ? "Join server" : "Continue with Google"}
         </Button>
+
+        {!user && (
+          <>
+            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or use email
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            {sentConfirm ? (
+              <p className="text-sm text-muted-foreground">
+                We sent a confirmation link to {email.trim()}. Open it, then come back to this page
+                to join.
+              </p>
+            ) : (
+              <form onSubmit={submitEmail} className="space-y-3 text-left">
+                <Input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  aria-label="Email"
+                />
+                <Input
+                  type="password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  aria-label="Password"
+                />
+                <Button type="submit" variant="secondary" disabled={emailBusy} className="w-full">
+                  {emailBusy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
+                </Button>
+                <button
+                  type="button"
+                  className="w-full text-center text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => {
+                    setSentConfirm(false);
+                    setMode(mode === "signup" ? "signin" : "signup");
+                  }}
+                >
+                  {mode === "signup" ? "I already have an account" : "Create an account"}
+                </button>
+              </form>
+            )}
+          </>
+        )}
       </div>
     </main>
   );

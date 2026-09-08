@@ -38,6 +38,19 @@ export function ProfileSetup({
   const [avatar, setAvatar] = useState<string | null>(profile?.avatar_url ?? null);
   const qc = useQueryClient();
   const first = !profile;
+  const deleteAccount = useServerFn(deleteMyAccount);
+
+  const removeAccount = useMutation({
+    mutationFn: async () => {
+      await deleteAccount({} as never);
+      await supabase.auth.signOut();
+    },
+    onSuccess: () => {
+      qc.clear();
+      window.location.href = "/";
+    },
+    onError: () => toast.error("Could not delete your account. Please try again."),
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -102,6 +115,33 @@ export function ProfileSetup({
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save profile"}
         </Button>
+
+        {!first && (
+          <div className="mt-2 border-t border-border pt-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full" disabled={removeAccount.isPending}>
+                  {removeAccount.isPending ? "Deleting…" : "Delete account"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes your profile, your messages, and any servers you own. It cannot be
+                    undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep my account</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => removeAccount.mutate()}>
+                    Delete for good
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
