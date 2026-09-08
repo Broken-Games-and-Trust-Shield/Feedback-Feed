@@ -208,6 +208,7 @@ function AppPage() {
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
+                {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
                 <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
               </div>
             </div>
