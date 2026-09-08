@@ -71,6 +71,12 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const send = useMutation({
     mutationFn: async (content: string) => {
       const { error } = await supabase
@@ -104,6 +110,10 @@ export function ChatPanel({
         ) : null}
         {messages.map((m) => {
           const p = profiles[m.user_id];
+          const secondsLeft = Math.ceil(
+            (new Date(m.created_at).getTime() + 30000 - now) / 1000,
+          );
+          const canDelete = m.user_id === meId && secondsLeft > 0;
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
@@ -120,13 +130,14 @@ export function ChatPanel({
                           minute: "2-digit",
                         })}
                       </span>
-                      {m.user_id === meId || canModerate ? (
+                      {canDelete ? (
                         <button
-                          className="ml-auto opacity-0 transition group-hover:opacity-100"
+                          className="ml-auto flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition group-hover:opacity-100"
                           onClick={() => remove.mutate(m.id)}
                           aria-label="Delete message"
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                          <Trash2 className="h-3.5 w-3.5 hover:text-destructive" />
+                          {secondsLeft}s
                         </button>
                       ) : null}
                     </div>
