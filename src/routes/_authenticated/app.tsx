@@ -516,6 +516,18 @@ function ChannelSettings({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const toggleOperatorOnly = useMutation({
+    mutationFn: async (value: boolean) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ operator_only: value })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const toggleSpeaker = useMutation({
     mutationFn: async ({ userId, allow }: { userId: string; allow: boolean }) => {
       if (allow) {
