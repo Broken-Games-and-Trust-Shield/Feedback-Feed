@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      channel_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          server_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          server_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          server_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_categories_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_speakers: {
         Row: {
           channel_id: string
@@ -42,6 +77,7 @@ export type Database = {
       }
       channels: {
         Row: {
+          category_id: string | null
           created_at: string
           id: string
           is_restricted: boolean
@@ -50,6 +86,7 @@ export type Database = {
           server_id: string
         }
         Insert: {
+          category_id?: string | null
           created_at?: string
           id?: string
           is_restricted?: boolean
@@ -58,6 +95,7 @@ export type Database = {
           server_id: string
         }
         Update: {
+          category_id?: string | null
           created_at?: string
           id?: string
           is_restricted?: boolean
@@ -66,6 +104,13 @@ export type Database = {
           server_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "channels_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "channel_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "channels_server_id_fkey"
             columns: ["server_id"]
