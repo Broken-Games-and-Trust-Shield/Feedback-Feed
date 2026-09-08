@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Crown, MoreVertical, ShieldMinus, ShieldPlus, UserMinus } from "lucide-react";
+import { Ban, Crown, Flag, MoreVertical, ShieldMinus, ShieldPlus, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -8,8 +9,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "./UserAvatar";
+import { ReportDialog } from "./ReportDialog";
 import { fetchProfiles, type Member, type Profile, type Server } from "@/lib/data";
 
 type Ban = { id: string; server_id: string; user_id: string; reason: string | null };
