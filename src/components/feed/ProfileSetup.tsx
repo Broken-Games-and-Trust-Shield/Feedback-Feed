@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,17 @@ export function ProfileSetup({
   const qc = useQueryClient();
   const first = !profile;
   const deleteAccount = useServerFn(deleteMyAccount);
+
+  const signOut = useMutation({
+    mutationFn: async () => {
+      await supabase.auth.signOut();
+    },
+    onSuccess: () => {
+      qc.clear();
+      window.location.href = "/";
+    },
+    onError: () => toast.error("Could not sign out. Please try again."),
+  });
 
   const removeAccount = useMutation({
     mutationFn: async () => {
@@ -117,7 +129,16 @@ export function ProfileSetup({
         </Button>
 
         {!first && (
-          <div className="mt-2 border-t border-border pt-4">
+          <div className="mt-2 space-y-3 border-t border-border pt-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={signOut.isPending}
+              onClick={() => signOut.mutate()}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              {signOut.isPending ? "Signing out…" : "Log out"}
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="w-full" disabled={removeAccount.isPending}>
