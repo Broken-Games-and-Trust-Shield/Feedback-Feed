@@ -30,6 +30,7 @@ import { UserAvatar } from "@/components/feed/UserAvatar";
 import { ProfileSetup } from "@/components/feed/ProfileSetup";
 import { ChatPanel } from "@/components/feed/ChatPanel";
 import { MembersPanel } from "@/components/feed/MembersPanel";
+import { ReportsInbox } from "@/components/feed/ReportsInbox";
 import {
   fetchChannels,
   fetchMembers,
