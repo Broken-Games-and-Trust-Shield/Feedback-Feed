@@ -307,6 +307,8 @@ export type Database = {
       is_owner: { Args: { _server: string; _user: string }; Returns: boolean }
       join_server_by_code: { Args: { _code: string }; Returns: string }
       server_name_by_code: { Args: { _code: string }; Returns: string }
+      shares_server: { Args: { _a: string; _b: string }; Returns: boolean }
+      user_id_by_username: { Args: { _username: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
