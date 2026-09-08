@@ -129,7 +129,16 @@ export function ProfileSetup({
         </Button>
 
         {!first && (
-          <div className="mt-2 border-t border-border pt-4">
+          <div className="mt-2 space-y-3 border-t border-border pt-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={signOut.isPending}
+              onClick={() => signOut.mutate()}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              {signOut.isPending ? "Signing out…" : "Log out"}
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="w-full" disabled={removeAccount.isPending}>
