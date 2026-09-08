@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, SendHorizonal, Trash2 } from "lucide-react";
+import { Flag, Lock, SendHorizonal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { UserAvatar } from "./UserAvatar";
+import { ReportDialog } from "./ReportDialog";
 import { fetchMessages, fetchProfiles, type Channel, type Profile } from "@/lib/data";
 
 export function ChatPanel({
