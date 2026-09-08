@@ -30,6 +30,41 @@ function InvitePage() {
   const { user, loading } = useSessionUser();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [sentConfirm, setSentConfirm] = useState(false);
+
+  async function submitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    const mail = email.trim();
+    if (!mail || password.length < 6) {
+      toast.error("Enter your email and a password of at least 6 characters.");
+      return;
+    }
+    setEmailBusy(true);
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({
+        email: mail,
+        password,
+        options: { emailRedirectTo: window.location.href },
+      });
+      setEmailBusy(false);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      if (!data.session) {
+        setSentConfirm(true);
+        toast.success("Check your email to confirm your account.");
+      }
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: mail, password });
+    setEmailBusy(false);
+    if (error) toast.error(error.message);
+  }
 
   const nameQuery = useQuery({
     queryKey: ["invite-name", code],
