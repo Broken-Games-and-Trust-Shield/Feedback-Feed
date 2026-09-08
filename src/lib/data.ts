@@ -29,6 +29,15 @@ export type Channel = {
   name: string;
   is_restricted: boolean;
   operator_only: boolean;
+  category_id: string | null;
+  created_at: string;
+};
+
+export type ChannelCategory = {
+  id: string;
+  server_id: string;
+  name: string;
+  position: number;
   created_at: string;
 };
 
