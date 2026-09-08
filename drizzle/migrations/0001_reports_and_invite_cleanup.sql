@@ -1,0 +1,73 @@
+CREATE TABLE public.member_reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  reported_user_id uuid NOT NULL,
+  reporter_id uuid NOT NULL,
+  reason text NOT NULL,
+  resolved boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.member_reports TO authenticated;
+GRANT ALL ON public.member_reports TO service_role;
+
+ALTER TABLE public.member_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "members report" ON public.member_reports
+  FOR INSERT TO authenticated
+  WITH CHECK (reporter_id = auth.uid() AND public.is_member(server_id, auth.uid()));
+
+CREATE POLICY "admins or reporter read reports" ON public.member_reports
+  FOR SELECT TO authenticated
+  USING (reporter_id = auth.uid() OR public.is_admin(server_id, auth.uid()));
+
+CREATE POLICY "admins update reports" ON public.member_reports
+  FOR UPDATE TO authenticated
+  USING (public.is_admin(server_id, auth.uid()))
+  WITH CHECK (public.is_admin(server_id, auth.uid()));
+
+CREATE POLICY "admins delete reports" ON public.member_reports
+  FOR DELETE TO authenticated
+  USING (public.is_admin(server_id, auth.uid()));
+
+CREATE INDEX member_reports_server_idx ON public.member_reports (server_id, resolved);
+
+-- Clear invites when a member leaves or is removed, so re-inviting works
+CREATE OR REPLACE FUNCTION public.clear_invites_on_member_removed()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  DELETE FROM public.server_invites
+  WHERE server_id = OLD.server_id AND invitee_id = OLD.user_id;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER trg_clear_invites_on_member_removed
+AFTER DELETE ON public.server_members
+FOR EACH ROW EXECUTE FUNCTION public.clear_invites_on_member_removed();
+
+-- Re-invite a user automatically when their ban is lifted
+CREATE OR REPLACE FUNCTION public.reinvite_on_unban()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.servers WHERE id = OLD.server_id) THEN
+    INSERT INTO public.server_invites (server_id, invitee_id, inviter_id, status)
+    VALUES (OLD.server_id, OLD.user_id, COALESCE(auth.uid(), OLD.banned_by), 'pending')
+    ON CONFLICT (server_id, invitee_id)
+    DO UPDATE SET status = 'pending', created_at = now();
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER trg_reinvite_on_unban
+AFTER DELETE ON public.server_bans
+FOR EACH ROW EXECUTE FUNCTION public.reinvite_on_unban();
