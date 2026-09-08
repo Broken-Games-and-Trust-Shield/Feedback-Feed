@@ -638,13 +638,12 @@ function InviteDialog({ serverId, inviteCode }: { serverId: string; inviteCode: 
 
   const invite = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("username", username.trim())
-        .maybeSingle();
+      const { data: foundId, error } = await supabase.rpc("user_id_by_username", {
+        _username: username.trim(),
+      });
       if (error) throw error;
-      if (!data) throw new Error("No account with that username.");
+      if (!foundId) throw new Error("No account with that username.");
+      const data = { id: foundId as string };
       const { data: me } = await supabase.auth.getUser();
       const { error: e2 } = await supabase.from("server_invites").insert({
         server_id: serverId,

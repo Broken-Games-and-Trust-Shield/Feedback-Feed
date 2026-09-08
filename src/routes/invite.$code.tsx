@@ -76,6 +76,7 @@ function InvitePage() {
       if (error) throw error;
       return (data as string | null) ?? null;
     },
+    enabled: !!user,
   });
 
   async function join() {
