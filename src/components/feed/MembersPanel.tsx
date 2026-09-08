@@ -36,6 +36,7 @@ export function MembersPanel({
   isAdmin: boolean;
 }) {
   const qc = useQueryClient();
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
   const ids = members.map((m) => m.user_id);
   const profilesQuery = useQuery({
     queryKey: ["profiles", ids],
