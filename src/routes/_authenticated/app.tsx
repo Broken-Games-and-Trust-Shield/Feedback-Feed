@@ -2,12 +2,17 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronDown,
+  ChevronRight,
+  FolderPlus,
   Hash,
   Lock,
   LogOut,
+  Pencil,
   Plus,
   Settings,
   Share2,
+  Trash2,
   UserPlus,
   Copy,
   Users,
