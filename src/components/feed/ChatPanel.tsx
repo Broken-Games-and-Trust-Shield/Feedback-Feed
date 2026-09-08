@@ -130,13 +130,14 @@ export function ChatPanel({
                           minute: "2-digit",
                         })}
                       </span>
-                      {m.user_id === meId || canModerate ? (
+                      {canDelete ? (
                         <button
-                          className="ml-auto opacity-0 transition group-hover:opacity-100"
+                          className="ml-auto flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition group-hover:opacity-100"
                           onClick={() => remove.mutate(m.id)}
                           aria-label="Delete message"
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                          <Trash2 className="h-3.5 w-3.5 hover:text-destructive" />
+                          {secondsLeft}s
                         </button>
                       ) : null}
                     </div>
