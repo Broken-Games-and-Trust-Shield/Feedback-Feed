@@ -185,7 +185,7 @@ function AppPage() {
               <span className="truncate">{c.name}</span>
             </button>
           ))}
-          {isAdmin && server ? <NewChannel serverId={server.id} /> : null}
+          {isOwner && server ? <NewChannel serverId={server.id} /> : null}
         </div>
 
         <button
@@ -211,7 +211,7 @@ function AppPage() {
                 <Hash className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="font-medium">{channel.name}</span>
-              {isAdmin ? (
+              {isOwner ? (
                 <ChannelSettings
                   channel={channel}
                   members={members.map((m) => m.user_id)}
