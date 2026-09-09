@@ -143,9 +143,11 @@ function AppPage() {
   const speakers = speakersQuery.data ?? [];
   const canChat =
     !!channel &&
-    (!channel.is_restricted ||
-      isAdmin ||
-      (!channel.operator_only && speakers.some((s) => s.user_id === meId)));
+    (!channel.is_restricted
+      ? true
+      : channel.operator_only
+        ? isOwner
+        : isAdmin || speakers.some((s) => s.user_id === meId));
 
   if (loading || !user) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading…</div>;
