@@ -342,17 +342,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      can_chat: { Args: { _channel: string; _user: string }; Returns: boolean }
-      channel_server: { Args: { _channel: string }; Returns: string }
       create_server: { Args: { _name: string }; Returns: string }
-      has_invite: { Args: { _server: string; _user: string }; Returns: boolean }
-      is_admin: { Args: { _server: string; _user: string }; Returns: boolean }
-      is_banned: { Args: { _server: string; _user: string }; Returns: boolean }
-      is_member: { Args: { _server: string; _user: string }; Returns: boolean }
-      is_owner: { Args: { _server: string; _user: string }; Returns: boolean }
       join_server_by_code: { Args: { _code: string }; Returns: string }
       server_name_by_code: { Args: { _code: string }; Returns: string }
-      shares_server: { Args: { _a: string; _b: string }; Returns: boolean }
       user_id_by_username: { Args: { _username: string }; Returns: string }
     }
     Enums: {
