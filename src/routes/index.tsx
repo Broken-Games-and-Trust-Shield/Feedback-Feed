@@ -115,19 +115,6 @@ function Landing() {
     }
   }
 
-  async function forgotPassword() {
-    const mail = email.trim();
-    if (!mail) {
-      toast.error("Enter your email first.");
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(mail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) toast.error(error.message);
-    else toast.success("Password reset link sent.");
-  }
-
   async function resendConfirmation() {
     const mail = email.trim();
     if (!mail) return;
@@ -253,15 +240,6 @@ function Landing() {
               >
                 {mode === "signup" ? "I already have an account" : "Create an account"}
               </button>
-              {mode === "signin" && (
-                <button
-                  type="button"
-                  className="underline underline-offset-2 hover:text-foreground"
-                  onClick={forgotPassword}
-                >
-                  Forgot password?
-                </button>
-              )}
             </div>
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
