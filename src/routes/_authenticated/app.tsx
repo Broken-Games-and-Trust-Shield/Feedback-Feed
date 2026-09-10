@@ -37,12 +37,14 @@ import { ChatPanel } from "@/components/feed/ChatPanel";
 import { MembersPanel } from "@/components/feed/MembersPanel";
 import { ReportsInbox } from "@/components/feed/ReportsInbox";
 import {
+  fetchCategories,
   fetchChannels,
   fetchMembers,
   fetchMyServers,
   fetchProfile,
   initials,
   type Channel,
+  type ChannelCategory,
 } from "@/lib/data";
 import { useSessionUser } from "@/lib/useSession";
 
@@ -111,6 +113,14 @@ function AppPage() {
   });
   const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
 
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", server?.id],
+    queryFn: () => fetchCategories(server!.id),
+    enabled: !!server,
+  });
+  const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const [collapsedTabs, setCollapsedTabs] = useState<string[]>([]);
+
   useEffect(() => {
     if (channels.length === 0) setActiveChannelId(null);
     else if (!channels.some((c) => c.id === activeChannelId)) setActiveChannelId(channels[0]!.id);
@@ -171,22 +181,75 @@ function AppPage() {
         </div>
 
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
-          {channels.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setActiveChannelId(c.id)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                c.id === activeChannelId
-                  ? "bg-primary/15 text-foreground"
-                  : "text-muted-foreground hover:bg-muted/40"
-              }`}
-            >
-              {c.is_restricted ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
-              <span className="truncate">{c.name}</span>
-            </button>
-          ))}
-          {isOwner && server ? <NewChannel serverId={server.id} /> : null}
+          {categories.map((cat) => {
+            const inCat = channels.filter((c) => c.category_id === cat.id);
+            const collapsed = collapsedTabs.includes(cat.id);
+            return (
+              <div key={cat.id} className="pt-1">
+                <div className="group flex items-center gap-1 px-1">
+                  <button
+                    onClick={() =>
+                      setCollapsedTabs((prev) =>
+                        prev.includes(cat.id)
+                          ? prev.filter((i) => i !== cat.id)
+                          : [...prev, cat.id],
+                      )
+                    }
+                    className="flex flex-1 items-center gap-1 py-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase hover:text-foreground"
+                  >
+                    {collapsed ? (
+                      <ChevronRight className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                    <span className="truncate">{cat.name}</span>
+                  </button>
+                  {isOwner ? <TabMenu category={cat} /> : null}
+                </div>
+                {!collapsed
+                  ? inCat.map((c) => (
+                      <ChannelButton
+                        key={c.id}
+                        channel={c}
+                        active={c.id === activeChannelId}
+                        onSelect={() => setActiveChannelId(c.id)}
+                        indent
+                      />
+                    ))
+                  : null}
+              </div>
+            );
+          })}
+
+          {channels.filter((c) => !c.category_id || !categories.some((k) => k.id === c.category_id))
+            .length > 0 ? (
+            <div className="pt-1">
+              {categories.length > 0 ? (
+                <p className="px-2 py-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                  Other chats
+                </p>
+              ) : null}
+              {channels
+                .filter((c) => !c.category_id || !categories.some((k) => k.id === c.category_id))
+                .map((c) => (
+                  <ChannelButton
+                    key={c.id}
+                    channel={c}
+                    active={c.id === activeChannelId}
+                    onSelect={() => setActiveChannelId(c.id)}
+                  />
+                ))}
+            </div>
+          ) : null}
+
+          {isOwner && server ? (
+            <div className="pt-2">
+              <NewChannel serverId={server.id} />
+              <NewTab serverId={server.id} />
+            </div>
+          ) : null}
         </div>
+
 
         <button
           onClick={() => setProfileOpen(true)}
@@ -214,6 +277,7 @@ function AppPage() {
               {isOwner ? (
                 <ChannelSettings
                   channel={channel}
+                  categories={categories}
                   members={members.map((m) => m.user_id)}
                   speakers={speakers.map((s) => s.user_id)}
                 />
@@ -492,10 +556,12 @@ function NewChannel({ serverId }: { serverId: string }) {
 
 function ChannelSettings({
   channel,
+  categories,
   members,
   speakers,
 }: {
   channel: Channel;
+  categories: ChannelCategory[];
   members: string[];
   speakers: string[];
 }) {
@@ -512,6 +578,18 @@ function ChannelSettings({
     enabled: open && members.length > 0,
   });
   const profiles = profilesQuery.data ?? {};
+
+  const setTab = useMutation({
+    mutationFn: async (categoryId: string | null) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ category_id: categoryId })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const toggleRestricted = useMutation({
     mutationFn: async (value: boolean) => {
@@ -581,6 +659,25 @@ function ChannelSettings({
           <DialogTitle>#{channel.name} settings</DialogTitle>
           <DialogDescription>Choose who is allowed to post here.</DialogDescription>
         </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="ctab">Tab</Label>
+          <select
+            id="ctab"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={channel.category_id ?? ""}
+            onChange={(e) => setTab.mutate(e.target.value || null)}
+          >
+            <option value="">No tab</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Tabs work like folders in the channel list.
+          </p>
+        </div>
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
           <p className="text-sm font-medium">Restricted posting</p>
           <Switch
@@ -806,5 +903,164 @@ function EmptyState({ hasServer, meId }: { hasServer: boolean; meId: string }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function ChannelButton({
+  channel,
+  active,
+  onSelect,
+  indent,
+}: {
+  channel: Channel;
+  active: boolean;
+  onSelect: () => void;
+  indent?: boolean;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-sm ${
+        indent ? "pl-6" : "pl-3"
+      } ${active ? "bg-primary/15 text-foreground" : "text-muted-foreground hover:bg-muted/40"}`}
+    >
+      {channel.is_restricted ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+      <span className="truncate">{channel.name}</span>
+    </button>
+  );
+}
+
+function NewTab({ serverId }: { serverId: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("channel_categories")
+        .insert({ server_id: serverId, name: name.trim() });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setName("");
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ["categories", serverId] });
+      toast.success("Tab created");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
+          <FolderPlus className="h-4 w-4" /> New tab
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New tab</DialogTitle>
+          <DialogDescription>
+            A tab groups chats together, like "Games" holding "minecraft".
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="tname">Tab name</Label>
+          <Input
+            id="tname"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Games"
+          />
+        </div>
+        <Button onClick={() => create.mutate()} disabled={!name.trim() || create.isPending}>
+          Create tab
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TabMenu({ category }: { category: ChannelCategory }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(category.name);
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ["categories", category.server_id] });
+    qc.invalidateQueries({ queryKey: ["channels", category.server_id] });
+  }
+
+  const rename = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("channel_categories")
+        .update({ name: name.trim() })
+        .eq("id", category.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setOpen(false);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error: e1 } = await supabase
+        .from("channels")
+        .update({ category_id: null })
+        .eq("category_id", category.id);
+      if (e1) throw e1;
+      const { error } = await supabase
+        .from("channel_categories")
+        .delete()
+        .eq("id", category.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setOpen(false);
+      refresh();
+      toast.success("Tab removed, chats kept");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="text-muted-foreground opacity-0 transition group-hover:opacity-100"
+          title="Tab settings"
+          aria-label={`Settings for ${category.name}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{category.name}</DialogTitle>
+          <DialogDescription>Rename this tab or remove it.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor={`tab-${category.id}`}>Tab name</Label>
+          <div className="flex gap-2">
+            <Input
+              id={`tab-${category.id}`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button onClick={() => rename.mutate()} disabled={!name.trim() || rename.isPending}>
+              Save
+            </Button>
+          </div>
+        </div>
+        <Button variant="destructive" className="gap-2" onClick={() => remove.mutate()}>
+          <Trash2 className="h-4 w-4" /> Delete tab
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
