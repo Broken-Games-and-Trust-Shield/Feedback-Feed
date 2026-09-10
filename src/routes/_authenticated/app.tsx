@@ -659,6 +659,25 @@ function ChannelSettings({
           <DialogTitle>#{channel.name} settings</DialogTitle>
           <DialogDescription>Choose who is allowed to post here.</DialogDescription>
         </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="ctab">Tab</Label>
+          <select
+            id="ctab"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={channel.category_id ?? ""}
+            onChange={(e) => setTab.mutate(e.target.value || null)}
+          >
+            <option value="">No tab</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Tabs work like folders in the channel list.
+          </p>
+        </div>
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
           <p className="text-sm font-medium">Restricted posting</p>
           <Switch
