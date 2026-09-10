@@ -113,7 +113,7 @@ export function ChatPanel({
           const secondsLeft = Math.ceil(
             (new Date(m.created_at).getTime() + 30000 - now) / 1000,
           );
-          const canDelete = m.user_id === meId && secondsLeft > 0;
+          const canDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
