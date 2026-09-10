@@ -113,7 +113,7 @@ export function ChatPanel({
           const secondsLeft = Math.ceil(
             (new Date(m.created_at).getTime() + 30000 - now) / 1000,
           );
-          const canDelete = m.user_id === meId && secondsLeft > 0;
+          const canDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
@@ -141,8 +141,14 @@ export function ChatPanel({
                         </button>
                       ) : null}
                     </div>
-                    <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
-                      {m.content}
+                    <p
+                      className={
+                        m.is_removed
+                          ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
+                          : "text-sm break-words whitespace-pre-wrap text-foreground/90"
+                      }
+                    >
+                      {m.is_removed ? "[message removed]" : m.content}
                     </p>
                   </div>
                 </div>
