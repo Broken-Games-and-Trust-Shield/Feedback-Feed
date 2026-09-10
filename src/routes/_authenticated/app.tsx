@@ -37,12 +37,14 @@ import { ChatPanel } from "@/components/feed/ChatPanel";
 import { MembersPanel } from "@/components/feed/MembersPanel";
 import { ReportsInbox } from "@/components/feed/ReportsInbox";
 import {
+  fetchCategories,
   fetchChannels,
   fetchMembers,
   fetchMyServers,
   fetchProfile,
   initials,
   type Channel,
+  type ChannelCategory,
 } from "@/lib/data";
 import { useSessionUser } from "@/lib/useSession";
 
