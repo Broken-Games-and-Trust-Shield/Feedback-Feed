@@ -579,6 +579,18 @@ function ChannelSettings({
   });
   const profiles = profilesQuery.data ?? {};
 
+  const setTab = useMutation({
+    mutationFn: async (categoryId: string | null) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ category_id: categoryId })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const toggleRestricted = useMutation({
     mutationFn: async (value: boolean) => {
       const { error } = await supabase
