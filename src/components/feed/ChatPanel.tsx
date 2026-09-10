@@ -141,8 +141,14 @@ export function ChatPanel({
                         </button>
                       ) : null}
                     </div>
-                    <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
-                      {m.content}
+                    <p
+                      className={
+                        m.is_removed
+                          ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
+                          : "text-sm break-words whitespace-pre-wrap text-foreground/90"
+                      }
+                    >
+                      {m.is_removed ? "[message removed]" : m.content}
                     </p>
                   </div>
                 </div>
