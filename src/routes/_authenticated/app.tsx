@@ -111,6 +111,14 @@ function AppPage() {
   });
   const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
 
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", server?.id],
+    queryFn: () => fetchCategories(server!.id),
+    enabled: !!server,
+  });
+  const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const [collapsedTabs, setCollapsedTabs] = useState<string[]>([]);
+
   useEffect(() => {
     if (channels.length === 0) setActiveChannelId(null);
     else if (!channels.some((c) => c.id === activeChannelId)) setActiveChannelId(channels[0]!.id);
