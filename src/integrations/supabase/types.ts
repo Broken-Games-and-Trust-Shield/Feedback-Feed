@@ -164,6 +164,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_removed: boolean
           user_id: string
         }
         Insert: {
@@ -171,6 +172,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          is_removed?: boolean
           user_id: string
         }
         Update: {
@@ -178,6 +180,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          is_removed?: boolean
           user_id?: string
         }
         Relationships: [
@@ -344,6 +347,10 @@ export type Database = {
     Functions: {
       create_server: { Args: { _name: string }; Returns: string }
       join_server_by_code: { Args: { _code: string }; Returns: string }
+      scrub_user_messages: {
+        Args: { _server_id: string; _user_id: string }
+        Returns: undefined
+      }
       server_name_by_code: { Args: { _code: string }; Returns: string }
       user_id_by_username: { Args: { _username: string }; Returns: string }
     }
