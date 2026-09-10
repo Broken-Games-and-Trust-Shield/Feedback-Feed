@@ -277,6 +277,7 @@ function AppPage() {
               {isOwner ? (
                 <ChannelSettings
                   channel={channel}
+                  categories={categories}
                   members={members.map((m) => m.user_id)}
                   speakers={speakers.map((s) => s.user_id)}
                 />
