@@ -556,10 +556,12 @@ function NewChannel({ serverId }: { serverId: string }) {
 
 function ChannelSettings({
   channel,
+  categories,
   members,
   speakers,
 }: {
   channel: Channel;
+  categories: ChannelCategory[];
   members: string[];
   speakers: string[];
 }) {
