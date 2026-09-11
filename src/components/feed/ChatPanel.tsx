@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flag, Lock, SendHorizonal, Trash2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Flag, Lock, Loader2, SendHorizonal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +25,7 @@ import {
 import { UserAvatar } from "./UserAvatar";
 import { ReportDialog } from "./ReportDialog";
 import { fetchMessages, fetchProfiles, type Channel, type Profile } from "@/lib/data";
+import { checkMessageTone } from "@/lib/moderation.functions";
 
 export function ChatPanel({
   channel,
@@ -99,6 +111,29 @@ export function ChatPanel({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["messages", channel.id] }),
     onError: () => toast.error("Could not delete that message."),
   });
+
+  const checkTone = useServerFn(checkMessageTone);
+  const [checking, setChecking] = useState(false);
+  const [warning, setWarning] = useState<{ content: string; reason: string } | null>(null);
+
+  const submit = async () => {
+    const v = text.trim();
+    if (!v || checking || send.isPending) return;
+    setChecking(true);
+    try {
+      const verdict = await checkTone({ data: { content: v } });
+      if (verdict.flagged) {
+        setWarning({ content: v, reason: verdict.reason });
+        return;
+      }
+    } catch {
+      // If the check is unavailable, don't block the message.
+    } finally {
+      setChecking(false);
+    }
+    send.mutate(v);
+  };
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -188,8 +223,7 @@ export function ChatPanel({
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              const v = text.trim();
-              if (v) send.mutate(v);
+              void submit();
             }}
           >
             <Input
@@ -198,8 +232,16 @@ export function ChatPanel({
               placeholder={`Message #${channel.name}`}
               className="bg-surface"
             />
-            <Button type="submit" size="icon" disabled={send.isPending || !text.trim()}>
-              <SendHorizonal className="h-4 w-4" />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={checking || send.isPending || !text.trim()}
+            >
+              {checking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendHorizonal className="h-4 w-4" />
+              )}
             </Button>
           </form>
         ) : (
@@ -209,6 +251,29 @@ export function ChatPanel({
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!warning} onOpenChange={(v) => (v ? null : setWarning(null))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>This might come across badly</AlertDialogTitle>
+            <AlertDialogDescription>
+              {warning?.reason || "Your message may be offensive or unkind."} You can go back and
+              change it, or send it as it is.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Let me edit it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (warning) send.mutate(warning.content);
+                setWarning(null);
+              }}
+            >
+              Send anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
