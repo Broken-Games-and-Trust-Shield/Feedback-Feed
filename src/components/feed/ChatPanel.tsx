@@ -223,8 +223,7 @@ export function ChatPanel({
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              const v = text.trim();
-              if (v) send.mutate(v);
+              void submit();
             }}
           >
             <Input
@@ -233,8 +232,16 @@ export function ChatPanel({
               placeholder={`Message #${channel.name}`}
               className="bg-surface"
             />
-            <Button type="submit" size="icon" disabled={send.isPending || !text.trim()}>
-              <SendHorizonal className="h-4 w-4" />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={checking || send.isPending || !text.trim()}
+            >
+              {checking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendHorizonal className="h-4 w-4" />
+              )}
             </Button>
           </form>
         ) : (
