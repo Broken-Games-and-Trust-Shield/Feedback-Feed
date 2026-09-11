@@ -251,6 +251,29 @@ export function ChatPanel({
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!warning} onOpenChange={(v) => (v ? null : setWarning(null))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>This might come across badly</AlertDialogTitle>
+            <AlertDialogDescription>
+              {warning?.reason || "Your message may be offensive or unkind."} You can go back and
+              change it, or send it as it is.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Let me edit it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (warning) send.mutate(warning.content);
+                setWarning(null);
+              }}
+            >
+              Send anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
