@@ -188,12 +188,14 @@ export function MembersPanel({
                         <DropdownMenuItem onClick={() => kick.mutate(m.user_id)}>
                           <UserMinus className="mr-2 h-4 w-4" /> Remove from server
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => ban.mutate(m.user_id)}
-                        >
-                          <Ban className="mr-2 h-4 w-4" /> Ban
-                        </DropdownMenuItem>
+                        {isOwner || m.role !== "admin" ? (
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => ban.mutate(m.user_id)}
+                          >
+                            <Ban className="mr-2 h-4 w-4" /> Ban
+                          </DropdownMenuItem>
+                        ) : null}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : null}
