@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flag, Lock, SendHorizonal, Trash2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Flag, Lock, Loader2, SendHorizonal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +25,7 @@ import {
 import { UserAvatar } from "./UserAvatar";
 import { ReportDialog } from "./ReportDialog";
 import { fetchMessages, fetchProfiles, type Channel, type Profile } from "@/lib/data";
+import { checkMessageTone } from "@/lib/moderation.functions";
 
 export function ChatPanel({
   channel,
