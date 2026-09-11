@@ -112,6 +112,29 @@ export function ChatPanel({
     onError: () => toast.error("Could not delete that message."),
   });
 
+  const checkTone = useServerFn(checkMessageTone);
+  const [checking, setChecking] = useState(false);
+  const [warning, setWarning] = useState<{ content: string; reason: string } | null>(null);
+
+  const submit = async () => {
+    const v = text.trim();
+    if (!v || checking || send.isPending) return;
+    setChecking(true);
+    try {
+      const verdict = await checkTone({ data: { content: v } });
+      if (verdict.flagged) {
+        setWarning({ content: v, reason: verdict.reason });
+        return;
+      }
+    } catch {
+      // If the check is unavailable, don't block the message.
+    } finally {
+      setChecking(false);
+    }
+    send.mutate(v);
+  };
+
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
