@@ -77,6 +77,7 @@ export type Database = {
       }
       channels: {
         Row: {
+          allow_uploads: boolean
           category_id: string | null
           created_at: string
           id: string
@@ -86,6 +87,7 @@ export type Database = {
           server_id: string
         }
         Insert: {
+          allow_uploads?: boolean
           category_id?: string | null
           created_at?: string
           id?: string
@@ -95,6 +97,7 @@ export type Database = {
           server_id: string
         }
         Update: {
+          allow_uploads?: boolean
           category_id?: string | null
           created_at?: string
           id?: string
@@ -160,6 +163,10 @@ export type Database = {
       }
       messages: {
         Row: {
+          attachment_name: string | null
+          attachment_size: number | null
+          attachment_type: string | null
+          attachment_url: string | null
           channel_id: string
           content: string
           created_at: string
@@ -168,6 +175,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attachment_name?: string | null
+          attachment_size?: number | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           channel_id: string
           content: string
           created_at?: string
@@ -176,6 +187,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attachment_name?: string | null
+          attachment_size?: number | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           channel_id?: string
           content?: string
           created_at?: string
