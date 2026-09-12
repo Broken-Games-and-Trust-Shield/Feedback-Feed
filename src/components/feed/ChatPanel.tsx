@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Flag, Lock, Loader2, SendHorizonal, Trash2 } from "lucide-react";
+import { Flag, Lock, Loader2, Paperclip, SendHorizonal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -89,18 +89,55 @@ export function ChatPanel({
     return () => clearInterval(t);
   }, []);
 
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
   const send = useMutation({
-    mutationFn: async (content: string) => {
-      const { error } = await supabase
-        .from("messages")
-        .insert({ channel_id: channel.id, user_id: meId, content });
+    mutationFn: async ({ content, upload }: { content: string; upload: File | null }) => {
+      let attachment: {
+        attachment_url: string;
+        attachment_type: string;
+        attachment_name: string;
+        attachment_size: number;
+      } | null = null;
+
+      if (upload) {
+        if (upload.size > 300 * 1024 * 1024) throw new Error("That file is bigger than 300 MB.");
+        setUploading(true);
+        try {
+          const ext = upload.name.includes(".") ? upload.name.split(".").pop() : "bin";
+          const path = `${channel.id}/${meId}/${crypto.randomUUID()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from("chat-uploads")
+            .upload(path, upload, { contentType: upload.type || "application/octet-stream" });
+          if (upErr) throw upErr;
+          attachment = {
+            attachment_url: path,
+            attachment_type: upload.type || "application/octet-stream",
+            attachment_name: upload.name.slice(0, 300),
+            attachment_size: upload.size,
+          };
+        } finally {
+          setUploading(false);
+        }
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        channel_id: channel.id,
+        user_id: meId,
+        content,
+        ...(attachment ?? {}),
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       setText("");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["messages", channel.id] });
     },
-    onError: () => toast.error("Message could not be sent."),
+    onError: (e: Error) => toast.error(e.message || "Message could not be sent."),
   });
 
   const remove = useMutation({
@@ -118,21 +155,24 @@ export function ChatPanel({
 
   const submit = async () => {
     const v = text.trim();
-    if (!v || checking || send.isPending) return;
-    setChecking(true);
-    try {
-      const verdict = await checkTone({ data: { content: v } });
-      if (verdict.flagged) {
-        setWarning({ content: v, reason: verdict.reason });
-        return;
+    if ((!v && !file) || checking || send.isPending) return;
+    if (v) {
+      setChecking(true);
+      try {
+        const verdict = await checkTone({ data: { content: v } });
+        if (verdict.flagged) {
+          setWarning({ content: v, reason: verdict.reason });
+          return;
+        }
+      } catch {
+        // If the check is unavailable, don't block the message.
+      } finally {
+        setChecking(false);
       }
-    } catch {
-      // If the check is unavailable, don't block the message.
-    } finally {
-      setChecking(false);
     }
-    send.mutate(v);
+    send.mutate({ content: v, upload: file });
   };
+
 
 
   return (
@@ -176,17 +216,27 @@ export function ChatPanel({
                         </button>
                       ) : null}
                     </div>
-                    <p
-                      className={
-                        m.is_removed
-                          ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
-                          : "text-sm break-words whitespace-pre-wrap text-foreground/90"
-                      }
-                    >
-                      {m.is_removed ? "[message removed]" : m.content}
-                    </p>
+                    {m.is_removed || m.content ? (
+                      <p
+                        className={
+                          m.is_removed
+                            ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
+                            : "text-sm break-words whitespace-pre-wrap text-foreground/90"
+                        }
+                      >
+                        {m.is_removed ? "[message removed]" : m.content}
+                      </p>
+                    ) : null}
+                    {!m.is_removed && m.attachment_url ? (
+                      <Attachment
+                        path={m.attachment_url}
+                        type={m.attachment_type ?? ""}
+                        name={m.attachment_name ?? "file"}
+                      />
+                    ) : null}
                   </div>
                 </div>
+
               </ContextMenuTrigger>
               <ContextMenuContent>
                 {m.user_id === meId ? (
@@ -220,30 +270,79 @@ export function ChatPanel({
       <div className="border-t border-border p-4">
         {canChat ? (
           <form
-            className="flex gap-2"
+            className="space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
               void submit();
             }}
           >
-            <Input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={`Message #${channel.name}`}
-              className="bg-surface"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={checking || send.isPending || !text.trim()}
-            >
-              {checking ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <SendHorizonal className="h-4 w-4" />
-              )}
-            </Button>
+            {file ? (
+              <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted-foreground">
+                <Paperclip className="h-3.5 w-3.5" />
+                <span className="truncate">{file.name}</span>
+                <span>({(file.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                <button
+                  type="button"
+                  className="ml-auto hover:text-destructive"
+                  onClick={() => {
+                    setFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  aria-label="Remove attachment"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
+            <div className="flex gap-2">
+              {channel.allow_uploads ? (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      if (f && f.size > 300 * 1024 * 1024) {
+                        toast.error("Photos and videos must be 300 MB or smaller.");
+                        e.target.value = "";
+                        return;
+                      }
+                      setFile(f);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Attach a photo or video"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : null}
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={`Message #${channel.name}`}
+                className="bg-surface"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={checking || uploading || send.isPending || (!text.trim() && !file)}
+              >
+                {checking || uploading || send.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendHorizonal className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </form>
+
         ) : (
           <div className="flex items-center justify-center gap-2 rounded-lg bg-surface px-4 py-3 text-sm text-muted-foreground">
             <Lock className="h-4 w-4" />
@@ -265,7 +364,7 @@ export function ChatPanel({
             <AlertDialogCancel>Let me edit it</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (warning) send.mutate(warning.content);
+                if (warning) send.mutate({ content: warning.content, upload: file });
                 setWarning(null);
               }}
             >
@@ -275,5 +374,54 @@ export function ChatPanel({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function Attachment({ path, type, name }: { path: string; type: string; name: string }) {
+  const { data: url } = useQuery({
+    queryKey: ["attachment", path],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage
+        .from("chat-uploads")
+        .createSignedUrl(path, 60 * 60);
+      if (error) throw error;
+      return data.signedUrl;
+    },
+    staleTime: 50 * 60 * 1000,
+  });
+
+  if (!url) {
+    return <p className="mt-2 text-xs text-muted-foreground">Loading attachment…</p>;
+  }
+  if (type.startsWith("image/")) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="mt-2 block">
+        <img
+          src={url}
+          alt={name}
+          loading="lazy"
+          className="max-h-80 max-w-full rounded-lg border border-border object-contain"
+        />
+      </a>
+    );
+  }
+  if (type.startsWith("video/")) {
+    return (
+      <video
+        src={url}
+        controls
+        className="mt-2 max-h-80 max-w-full rounded-lg border border-border"
+      />
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs underline"
+    >
+      <Paperclip className="h-3.5 w-3.5" /> {name}
+    </a>
   );
 }
