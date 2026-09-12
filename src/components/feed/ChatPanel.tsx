@@ -305,7 +305,7 @@ export function ChatPanel({
             <AlertDialogCancel>Let me edit it</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (warning) send.mutate(warning.content);
+                if (warning) send.mutate({ content: warning.content, upload: file });
                 setWarning(null);
               }}
             >
