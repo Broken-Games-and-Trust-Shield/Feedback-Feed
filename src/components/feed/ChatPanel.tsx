@@ -89,18 +89,55 @@ export function ChatPanel({
     return () => clearInterval(t);
   }, []);
 
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
   const send = useMutation({
-    mutationFn: async (content: string) => {
-      const { error } = await supabase
-        .from("messages")
-        .insert({ channel_id: channel.id, user_id: meId, content });
+    mutationFn: async ({ content, upload }: { content: string; upload: File | null }) => {
+      let attachment: {
+        attachment_url: string;
+        attachment_type: string;
+        attachment_name: string;
+        attachment_size: number;
+      } | null = null;
+
+      if (upload) {
+        if (upload.size > 300 * 1024 * 1024) throw new Error("That file is bigger than 300 MB.");
+        setUploading(true);
+        try {
+          const ext = upload.name.includes(".") ? upload.name.split(".").pop() : "bin";
+          const path = `${channel.id}/${meId}/${crypto.randomUUID()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from("chat-uploads")
+            .upload(path, upload, { contentType: upload.type || "application/octet-stream" });
+          if (upErr) throw upErr;
+          attachment = {
+            attachment_url: path,
+            attachment_type: upload.type || "application/octet-stream",
+            attachment_name: upload.name.slice(0, 300),
+            attachment_size: upload.size,
+          };
+        } finally {
+          setUploading(false);
+        }
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        channel_id: channel.id,
+        user_id: meId,
+        content,
+        ...(attachment ?? {}),
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       setText("");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["messages", channel.id] });
     },
-    onError: () => toast.error("Message could not be sent."),
+    onError: (e: Error) => toast.error(e.message || "Message could not be sent."),
   });
 
   const remove = useMutation({
@@ -118,21 +155,24 @@ export function ChatPanel({
 
   const submit = async () => {
     const v = text.trim();
-    if (!v || checking || send.isPending) return;
-    setChecking(true);
-    try {
-      const verdict = await checkTone({ data: { content: v } });
-      if (verdict.flagged) {
-        setWarning({ content: v, reason: verdict.reason });
-        return;
+    if ((!v && !file) || checking || send.isPending) return;
+    if (v) {
+      setChecking(true);
+      try {
+        const verdict = await checkTone({ data: { content: v } });
+        if (verdict.flagged) {
+          setWarning({ content: v, reason: verdict.reason });
+          return;
+        }
+      } catch {
+        // If the check is unavailable, don't block the message.
+      } finally {
+        setChecking(false);
       }
-    } catch {
-      // If the check is unavailable, don't block the message.
-    } finally {
-      setChecking(false);
     }
-    send.mutate(v);
+    send.mutate({ content: v, upload: file });
   };
+
 
 
   return (
