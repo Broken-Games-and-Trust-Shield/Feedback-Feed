@@ -741,6 +741,19 @@ function ChannelSettings({
             )}
           </>
         ) : null}
+        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+          <div className="pr-3">
+            <p className="text-sm font-medium">File uploads</p>
+            <p className="text-xs text-muted-foreground">
+              Let people attach photos and videos up to 300 MB.
+            </p>
+          </div>
+          <Switch
+            checked={channel.allow_uploads}
+            onCheckedChange={(v) => toggleUploads.mutate(v)}
+          />
+        </div>
+
         <Button variant="destructive" onClick={() => deleteChannel.mutate()}>
           Delete channel
         </Button>
