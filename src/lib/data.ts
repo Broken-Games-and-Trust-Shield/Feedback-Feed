@@ -29,6 +29,7 @@ export type Channel = {
   name: string;
   is_restricted: boolean;
   operator_only: boolean;
+  allow_uploads: boolean;
   category_id: string | null;
   created_at: string;
 };
@@ -48,7 +49,12 @@ export type Message = {
   content: string;
   created_at: string;
   is_removed?: boolean;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
 };
+
 
 export async function fetchProfile(userId: string) {
   const { data, error } = await supabase
