@@ -270,30 +270,79 @@ export function ChatPanel({
       <div className="border-t border-border p-4">
         {canChat ? (
           <form
-            className="flex gap-2"
+            className="space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
               void submit();
             }}
           >
-            <Input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={`Message #${channel.name}`}
-              className="bg-surface"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={checking || send.isPending || !text.trim()}
-            >
-              {checking ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <SendHorizonal className="h-4 w-4" />
-              )}
-            </Button>
+            {file ? (
+              <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted-foreground">
+                <Paperclip className="h-3.5 w-3.5" />
+                <span className="truncate">{file.name}</span>
+                <span>({(file.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                <button
+                  type="button"
+                  className="ml-auto hover:text-destructive"
+                  onClick={() => {
+                    setFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  aria-label="Remove attachment"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
+            <div className="flex gap-2">
+              {channel.allow_uploads ? (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      if (f && f.size > 300 * 1024 * 1024) {
+                        toast.error("Photos and videos must be 300 MB or smaller.");
+                        e.target.value = "";
+                        return;
+                      }
+                      setFile(f);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Attach a photo or video"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : null}
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={`Message #${channel.name}`}
+                className="bg-surface"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={checking || uploading || send.isPending || (!text.trim() && !file)}
+              >
+                {checking || uploading || send.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendHorizonal className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </form>
+
         ) : (
           <div className="flex items-center justify-center gap-2 rounded-lg bg-surface px-4 py-3 text-sm text-muted-foreground">
             <Lock className="h-4 w-4" />
