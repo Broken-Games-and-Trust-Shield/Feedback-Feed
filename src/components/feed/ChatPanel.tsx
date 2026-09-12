@@ -216,17 +216,27 @@ export function ChatPanel({
                         </button>
                       ) : null}
                     </div>
-                    <p
-                      className={
-                        m.is_removed
-                          ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
-                          : "text-sm break-words whitespace-pre-wrap text-foreground/90"
-                      }
-                    >
-                      {m.is_removed ? "[message removed]" : m.content}
-                    </p>
+                    {m.is_removed || m.content ? (
+                      <p
+                        className={
+                          m.is_removed
+                            ? "text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
+                            : "text-sm break-words whitespace-pre-wrap text-foreground/90"
+                        }
+                      >
+                        {m.is_removed ? "[message removed]" : m.content}
+                      </p>
+                    ) : null}
+                    {!m.is_removed && m.attachment_url ? (
+                      <Attachment
+                        path={m.attachment_url}
+                        type={m.attachment_type ?? ""}
+                        name={m.attachment_name ?? "file"}
+                      />
+                    ) : null}
                   </div>
                 </div>
+
               </ContextMenuTrigger>
               <ContextMenuContent>
                 {m.user_id === meId ? (
