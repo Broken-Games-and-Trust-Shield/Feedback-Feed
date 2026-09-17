@@ -177,7 +177,12 @@ function AppPage() {
           <span className="truncate font-display font-semibold">
             {server ? server.name : "No server"}
           </span>
-          {server ? <ServerMenu serverId={server.id} isOwner={isOwner} meId={meId} /> : null}
+          {server ? (
+            <div className="flex items-center gap-1">
+              {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
+              <ServerMenu serverId={server.id} isOwner={isOwner} meId={meId} />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -283,7 +288,6 @@ function AppPage() {
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
-                {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
                 {isOwner ? (
                   <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
                 ) : null}
