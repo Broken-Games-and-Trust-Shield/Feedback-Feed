@@ -65,6 +65,23 @@ export function ReportsInbox({ serverId }: { serverId: string }) {
   const profiles = profilesQuery.data ?? {};
   const nameOf = (id: string) => profiles[id]?.username ?? "Unknown";
 
+  const messageIds = reports.map((r) => r.message_id).filter((v): v is string => !!v);
+  const messagesQuery = useQuery({
+    queryKey: ["reported-messages", serverId, messageIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, content, is_removed, created_at, channel_id, channels(name)")
+        .in("id", messageIds);
+      if (error) throw error;
+      const map: Record<string, ReportedMessage> = {};
+      for (const m of (data ?? []) as unknown as ReportedMessage[]) map[m.id] = m;
+      return map;
+    },
+    enabled: open && messageIds.length > 0,
+  });
+  const reportedMessages = messagesQuery.data ?? {};
+
   const resolve = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
