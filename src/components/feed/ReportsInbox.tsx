@@ -22,11 +22,22 @@ type Report = {
   reason: string;
   resolved: boolean;
   created_at: string;
+  message_id: string | null;
+};
+
+type ReportedMessage = {
+  id: string;
+  content: string;
+  is_removed: boolean;
+  created_at: string;
+  channel_id: string;
+  channels: { name: string } | null;
 };
 
 export function ReportsInbox({ serverId }: { serverId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<string[]>([]);
 
   const reportsQuery = useQuery({
     queryKey: ["reports", serverId],
