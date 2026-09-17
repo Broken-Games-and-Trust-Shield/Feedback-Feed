@@ -20,6 +20,7 @@ export function ReportDialog({
   reportedUserId,
   reportedName,
   reporterId,
+  messageId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -27,6 +28,7 @@ export function ReportDialog({
   reportedUserId: string;
   reportedName: string;
   reporterId: string;
+  messageId?: string | null;
 }) {
   const [reason, setReason] = useState("");
 
