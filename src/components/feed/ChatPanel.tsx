@@ -349,13 +349,17 @@ export function ChatPanel({
               <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={`Message #${channel.name}`}
+                placeholder={
+                  waiting ? `Slow mode: wait ${cooldownLeft}s` : `Message #${channel.name}`
+                }
                 className="bg-surface"
               />
               <Button
                 type="submit"
                 size="icon"
-                disabled={checking || uploading || send.isPending || (!text.trim() && !file)}
+                disabled={
+                  checking || uploading || send.isPending || waiting || (!text.trim() && !file)
+                }
               >
                 {checking || uploading || send.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -364,6 +368,13 @@ export function ChatPanel({
                 )}
               </Button>
             </div>
+            {slowmode > 0 && !slowmodeExempt ? (
+              <p className="text-xs text-muted-foreground">
+                {waiting
+                  ? `Slow mode is on — you can send again in ${cooldownLeft}s.`
+                  : `Slow mode is on — one message every ${slowmode} seconds.`}
+              </p>
+            ) : null}
           </form>
 
         ) : (
