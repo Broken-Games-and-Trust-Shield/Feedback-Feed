@@ -619,6 +619,18 @@ function ChannelSettings({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const setSlowmode = useMutation({
+    mutationFn: async (value: number) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ slowmode_seconds: value })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const toggleUploads = useMutation({
     mutationFn: async (value: boolean) => {
       const { error } = await supabase
