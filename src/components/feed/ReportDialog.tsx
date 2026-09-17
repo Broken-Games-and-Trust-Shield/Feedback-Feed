@@ -41,6 +41,7 @@ export function ReportDialog({
         reported_user_id: reportedUserId,
         reporter_id: reporterId,
         reason: text,
+        message_id: messageId ?? null,
       });
       if (error) throw error;
     },

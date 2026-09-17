@@ -40,7 +40,11 @@ export function ChatPanel({
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
-  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
+  const [reportTarget, setReportTarget] = useState<{
+    id: string;
+    name: string;
+    messageId?: string | null;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const messagesQuery = useQuery({
