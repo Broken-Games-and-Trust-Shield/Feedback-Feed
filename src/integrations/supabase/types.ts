@@ -85,6 +85,7 @@ export type Database = {
           name: string
           operator_only: boolean
           server_id: string
+          slowmode_seconds: number
         }
         Insert: {
           allow_uploads?: boolean
@@ -95,6 +96,7 @@ export type Database = {
           name: string
           operator_only?: boolean
           server_id: string
+          slowmode_seconds?: number
         }
         Update: {
           allow_uploads?: boolean
@@ -105,6 +107,7 @@ export type Database = {
           name?: string
           operator_only?: boolean
           server_id?: string
+          slowmode_seconds?: number
         }
         Relationships: [
           {
@@ -127,6 +130,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          message_id: string | null
           reason: string
           reported_user_id: string
           reporter_id: string
@@ -136,6 +140,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          message_id?: string | null
           reason: string
           reported_user_id: string
           reporter_id: string
@@ -145,6 +150,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          message_id?: string | null
           reason?: string
           reported_user_id?: string
           reporter_id?: string
@@ -152,6 +158,13 @@ export type Database = {
           server_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "member_reports_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "member_reports_server_id_fkey"
             columns: ["server_id"]
