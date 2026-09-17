@@ -248,7 +248,11 @@ export function ChatPanel({
                 ) : (
                   <ContextMenuItem
                     onClick={() =>
-                      setReportTarget({ id: m.user_id, name: p?.username ?? "this member" })
+                      setReportTarget({
+                        id: m.user_id,
+                        name: p?.username ?? "this member",
+                        messageId: m.id,
+                      })
                     }
                   >
                     <Flag className="mr-2 h-4 w-4" /> Report {p?.username ?? "member"}
@@ -267,6 +271,7 @@ export function ChatPanel({
             reportedUserId={reportTarget.id}
             reportedName={reportTarget.name}
             reporterId={meId}
+            messageId={reportTarget.messageId ?? null}
           />
         ) : null}
       </div>
