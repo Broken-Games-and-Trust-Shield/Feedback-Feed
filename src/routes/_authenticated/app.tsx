@@ -299,6 +299,7 @@ function AppPage() {
               meId={meId}
               canChat={canChat}
               canModerate={isAdmin}
+              slowmodeExempt={isOwner}
             />
           </>
         ) : (
