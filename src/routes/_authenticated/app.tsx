@@ -769,6 +769,37 @@ function ChannelSettings({
             onCheckedChange={(v) => toggleUploads.mutate(v)}
           />
         </div>
+        <div className="rounded-lg bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <div className="pr-3">
+              <p className="text-sm font-medium">Slow mode</p>
+              <p className="text-xs text-muted-foreground">
+                Make people wait between messages. You are exempt.
+              </p>
+            </div>
+            <Switch
+              checked={channel.slowmode_seconds > 0}
+              onCheckedChange={(v) => setSlowmode.mutate(v ? 30 : 0)}
+            />
+          </div>
+          {channel.slowmode_seconds > 0 ? (
+            <select
+              className="mt-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={channel.slowmode_seconds}
+              onChange={(e) => setSlowmode.mutate(Number(e.target.value))}
+            >
+              {[5, 10, 15, 30, 50, 60, 120, 300, 600, 900, 3600, 21600].map((s) => (
+                <option key={s} value={s}>
+                  {s < 60
+                    ? `${s} seconds`
+                    : s < 3600
+                      ? `${s / 60} minute${s === 60 ? "" : "s"}`
+                      : `${s / 3600} hour${s === 3600 ? "" : "s"}`}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
 
         <Button variant="destructive" onClick={() => deleteChannel.mutate()}>
           Delete channel
