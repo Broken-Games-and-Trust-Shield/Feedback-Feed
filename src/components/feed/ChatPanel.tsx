@@ -32,11 +32,13 @@ export function ChatPanel({
   meId,
   canChat,
   canModerate,
+  slowmodeExempt = false,
 }: {
   channel: Channel;
   meId: string;
   canChat: boolean;
   canModerate: boolean;
+  slowmodeExempt?: boolean;
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
