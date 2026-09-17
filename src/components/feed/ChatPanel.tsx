@@ -95,6 +95,14 @@ export function ChatPanel({
     return () => clearInterval(t);
   }, []);
 
+  const slowmode = channel.slowmode_seconds ?? 0;
+  const lastMine = [...messages].reverse().find((m) => m.user_id === meId);
+  const cooldownLeft =
+    slowmode > 0 && !slowmodeExempt && lastMine
+      ? Math.ceil((new Date(lastMine.created_at).getTime() + slowmode * 1000 - now) / 1000)
+      : 0;
+  const waiting = cooldownLeft > 0;
+
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
