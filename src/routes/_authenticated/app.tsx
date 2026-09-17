@@ -177,7 +177,12 @@ function AppPage() {
           <span className="truncate font-display font-semibold">
             {server ? server.name : "No server"}
           </span>
-          {server ? <ServerMenu serverId={server.id} isOwner={isOwner} meId={meId} /> : null}
+          {server ? (
+            <div className="flex items-center gap-1">
+              {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
+              <ServerMenu serverId={server.id} isOwner={isOwner} meId={meId} />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -283,7 +288,6 @@ function AppPage() {
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
-                {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
                 {isOwner ? (
                   <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
                 ) : null}
@@ -295,6 +299,7 @@ function AppPage() {
               meId={meId}
               canChat={canChat}
               canModerate={isAdmin}
+              slowmodeExempt={isOwner}
             />
           </>
         ) : (
@@ -615,6 +620,18 @@ function ChannelSettings({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const setSlowmode = useMutation({
+    mutationFn: async (value: number) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ slowmode_seconds: value })
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const toggleUploads = useMutation({
     mutationFn: async (value: boolean) => {
       const { error } = await supabase
@@ -752,6 +769,37 @@ function ChannelSettings({
             checked={channel.allow_uploads}
             onCheckedChange={(v) => toggleUploads.mutate(v)}
           />
+        </div>
+        <div className="rounded-lg bg-muted/30 p-3">
+          <div className="flex items-center justify-between">
+            <div className="pr-3">
+              <p className="text-sm font-medium">Slow mode</p>
+              <p className="text-xs text-muted-foreground">
+                Make people wait between messages. You are exempt.
+              </p>
+            </div>
+            <Switch
+              checked={channel.slowmode_seconds > 0}
+              onCheckedChange={(v) => setSlowmode.mutate(v ? 30 : 0)}
+            />
+          </div>
+          {channel.slowmode_seconds > 0 ? (
+            <select
+              className="mt-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={channel.slowmode_seconds}
+              onChange={(e) => setSlowmode.mutate(Number(e.target.value))}
+            >
+              {[5, 10, 15, 30, 50, 60, 120, 300, 600, 900, 3600, 21600].map((s) => (
+                <option key={s} value={s}>
+                  {s < 60
+                    ? `${s} seconds`
+                    : s < 3600
+                      ? `${s / 60} minute${s === 60 ? "" : "s"}`
+                      : `${s / 3600} hour${s === 3600 ? "" : "s"}`}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         <Button variant="destructive" onClick={() => deleteChannel.mutate()}>

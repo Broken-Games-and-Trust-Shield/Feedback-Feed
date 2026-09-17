@@ -32,15 +32,21 @@ export function ChatPanel({
   meId,
   canChat,
   canModerate,
+  slowmodeExempt = false,
 }: {
   channel: Channel;
   meId: string;
   canChat: boolean;
   canModerate: boolean;
+  slowmodeExempt?: boolean;
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
-  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
+  const [reportTarget, setReportTarget] = useState<{
+    id: string;
+    name: string;
+    messageId?: string | null;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const messagesQuery = useQuery({
@@ -88,6 +94,14 @@ export function ChatPanel({
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const slowmode = channel.slowmode_seconds ?? 0;
+  const lastMine = [...messages].reverse().find((m) => m.user_id === meId);
+  const cooldownLeft =
+    slowmode > 0 && !slowmodeExempt && lastMine
+      ? Math.ceil((new Date(lastMine.created_at).getTime() + slowmode * 1000 - now) / 1000)
+      : 0;
+  const waiting = cooldownLeft > 0;
 
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +170,10 @@ export function ChatPanel({
   const submit = async () => {
     const v = text.trim();
     if ((!v && !file) || checking || send.isPending) return;
+    if (waiting) {
+      toast.error(`Slow mode is on. Wait ${cooldownLeft}s before sending again.`);
+      return;
+    }
     if (v) {
       setChecking(true);
       try {
@@ -244,7 +262,11 @@ export function ChatPanel({
                 ) : (
                   <ContextMenuItem
                     onClick={() =>
-                      setReportTarget({ id: m.user_id, name: p?.username ?? "this member" })
+                      setReportTarget({
+                        id: m.user_id,
+                        name: p?.username ?? "this member",
+                        messageId: m.id,
+                      })
                     }
                   >
                     <Flag className="mr-2 h-4 w-4" /> Report {p?.username ?? "member"}
@@ -263,6 +285,7 @@ export function ChatPanel({
             reportedUserId={reportTarget.id}
             reportedName={reportTarget.name}
             reporterId={meId}
+            messageId={reportTarget.messageId ?? null}
           />
         ) : null}
       </div>
@@ -326,13 +349,17 @@ export function ChatPanel({
               <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={`Message #${channel.name}`}
+                placeholder={
+                  waiting ? `Slow mode: wait ${cooldownLeft}s` : `Message #${channel.name}`
+                }
                 className="bg-surface"
               />
               <Button
                 type="submit"
                 size="icon"
-                disabled={checking || uploading || send.isPending || (!text.trim() && !file)}
+                disabled={
+                  checking || uploading || send.isPending || waiting || (!text.trim() && !file)
+                }
               >
                 {checking || uploading || send.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -341,6 +368,13 @@ export function ChatPanel({
                 )}
               </Button>
             </div>
+            {slowmode > 0 && !slowmodeExempt ? (
+              <p className="text-xs text-muted-foreground">
+                {waiting
+                  ? `Slow mode is on — you can send again in ${cooldownLeft}s.`
+                  : `Slow mode is on — one message every ${slowmode} seconds.`}
+              </p>
+            ) : null}
           </form>
 
         ) : (

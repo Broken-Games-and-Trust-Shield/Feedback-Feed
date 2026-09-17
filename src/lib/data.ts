@@ -30,6 +30,7 @@ export type Channel = {
   is_restricted: boolean;
   operator_only: boolean;
   allow_uploads: boolean;
+  slowmode_seconds: number;
   category_id: string | null;
   created_at: string;
 };

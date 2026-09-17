@@ -22,11 +22,22 @@ type Report = {
   reason: string;
   resolved: boolean;
   created_at: string;
+  message_id: string | null;
+};
+
+type ReportedMessage = {
+  id: string;
+  content: string;
+  is_removed: boolean;
+  created_at: string;
+  channel_id: string;
+  channels: { name: string } | null;
 };
 
 export function ReportsInbox({ serverId }: { serverId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<string[]>([]);
 
   const reportsQuery = useQuery({
     queryKey: ["reports", serverId],
@@ -53,6 +64,23 @@ export function ReportsInbox({ serverId }: { serverId: string }) {
   });
   const profiles = profilesQuery.data ?? {};
   const nameOf = (id: string) => profiles[id]?.username ?? "Unknown";
+
+  const messageIds = reports.map((r) => r.message_id).filter((v): v is string => !!v);
+  const messagesQuery = useQuery({
+    queryKey: ["reported-messages", serverId, messageIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, content, is_removed, created_at, channel_id, channels(name)")
+        .in("id", messageIds);
+      if (error) throw error;
+      const map: Record<string, ReportedMessage> = {};
+      for (const m of (data ?? []) as unknown as ReportedMessage[]) map[m.id] = m;
+      return map;
+    },
+    enabled: open && messageIds.length > 0,
+  });
+  const reportedMessages = messagesQuery.data ?? {};
 
   const resolve = useMutation({
     mutationFn: async (id: string) => {
@@ -99,6 +127,44 @@ export function ReportsInbox({ serverId }: { serverId: string }) {
                 </span>
               </p>
               <p className="mt-1 text-sm whitespace-pre-wrap text-foreground/90">{r.reason}</p>
+              {r.message_id ? (
+                shown.includes(r.id) ? (
+                  <div className="mt-2 rounded-lg border border-border bg-background p-2">
+                    {reportedMessages[r.message_id] ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          #{reportedMessages[r.message_id]!.channels?.name ?? "chat"} ·{" "}
+                          {new Date(
+                            reportedMessages[r.message_id]!.created_at,
+                          ).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-sm whitespace-pre-wrap">
+                          {reportedMessages[r.message_id]!.is_removed
+                            ? "[message removed]"
+                            : reportedMessages[r.message_id]!.content || "(attachment only)"}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {messagesQuery.isLoading ? "Loading message…" : "That message is gone."}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-1 h-7 px-2 text-xs"
+                    onClick={() => setShown((p) => [...p, r.id])}
+                  >
+                    View message
+                  </Button>
+                )
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Reported from their account — no message attached.
+                </p>
+              )}
               <div className="mt-2 flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
                   {new Date(r.created_at).toLocaleString()}
