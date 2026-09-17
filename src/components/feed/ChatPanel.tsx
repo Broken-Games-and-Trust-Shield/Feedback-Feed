@@ -170,6 +170,10 @@ export function ChatPanel({
   const submit = async () => {
     const v = text.trim();
     if ((!v && !file) || checking || send.isPending) return;
+    if (waiting) {
+      toast.error(`Slow mode is on. Wait ${cooldownLeft}s before sending again.`);
+      return;
+    }
     if (v) {
       setChecking(true);
       try {
