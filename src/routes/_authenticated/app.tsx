@@ -128,6 +128,47 @@ function AppPage() {
 
   const channel = channels.find((c) => c.id === activeChannelId) ?? null;
 
+  const unreadQuery = useQuery({
+    queryKey: ["unread", server?.id, meId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("unread_counts", {
+        _server_id: server!.id,
+      });
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      for (const r of (data ?? []) as { channel_id: string; unread: number }[])
+        map[r.channel_id] = Number(r.unread);
+      return map;
+    },
+    enabled: !!server && !!meId,
+  });
+  const unread = unreadQuery.data ?? {};
+
+  useEffect(() => {
+    if (!server) return;
+    const ch = supabase
+      .channel(`unread-${server.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () =>
+        qc.invalidateQueries({ queryKey: ["unread", server.id] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [server, qc]);
+
+  const activeUnread = activeChannelId ? (unread[activeChannelId] ?? 0) : 0;
+  useEffect(() => {
+    if (!activeChannelId || !meId) return;
+    void (supabase as any)
+      .from("channel_reads")
+      .upsert(
+        { user_id: meId, channel_id: activeChannelId, last_read_at: new Date().toISOString() },
+        { onConflict: "user_id,channel_id" },
+      )
+      .then(() => qc.invalidateQueries({ queryKey: ["unread"] }));
+  }, [activeChannelId, activeUnread, meId, qc]);
+
   const membersQuery = useQuery({
     queryKey: ["members", server?.id],
     queryFn: () => fetchMembers(server!.id),
@@ -217,6 +258,7 @@ function AppPage() {
                         key={c.id}
                         channel={c}
                         active={c.id === activeChannelId}
+                        unread={unread[c.id] ?? 0}
                         onSelect={() => setActiveChannelId(c.id)}
                         indent
                       />
@@ -241,6 +283,7 @@ function AppPage() {
                     key={c.id}
                     channel={c}
                     active={c.id === activeChannelId}
+                    unread={unread[c.id] ?? 0}
                     onSelect={() => setActiveChannelId(c.id)}
                   />
                 ))}
@@ -288,6 +331,9 @@ function AppPage() {
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
+                {(channel as Channel & { send_emails?: boolean }).send_emails ? (
+                  <WeeklyEmailToggle channelId={channel.id} meId={meId} />
+                ) : null}
                 {isOwner ? (
                   <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
                 ) : null}
@@ -643,6 +689,17 @@ function ChannelSettings({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
     onError: (e: Error) => toast.error(e.message),
   });
+  const toggleEmails = useMutation({
+    mutationFn: async (value: boolean) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ send_emails: value } as never)
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
 
   const toggleSpeaker = useMutation({
@@ -758,6 +815,18 @@ function ChannelSettings({
             )}
           </>
         ) : null}
+        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+          <div className="pr-3">
+            <p className="text-sm font-medium">Send emails</p>
+            <p className="text-xs text-muted-foreground">
+              Let members sign up for a weekly email with this chat's conversation.
+            </p>
+          </div>
+          <Switch
+            checked={!!(channel as Channel & { send_emails?: boolean }).send_emails}
+            onCheckedChange={(v) => toggleEmails.mutate(v)}
+          />
+        </div>
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
           <div className="pr-3">
             <p className="text-sm font-medium">File uploads</p>
@@ -985,22 +1054,71 @@ function ChannelButton({
   active,
   onSelect,
   indent,
+  unread = 0,
 }: {
   channel: Channel;
   active: boolean;
   onSelect: () => void;
   indent?: boolean;
+  unread?: number;
 }) {
+  const show = !active && unread > 0;
   return (
     <button
       onClick={onSelect}
       className={`flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-sm ${
         indent ? "pl-6" : "pl-3"
-      } ${active ? "bg-primary/15 text-foreground" : "text-muted-foreground hover:bg-muted/40"}`}
+      } ${active ? "bg-primary/15 text-foreground" : show ? "text-foreground hover:bg-muted/40" : "text-muted-foreground hover:bg-muted/40"}`}
     >
       {channel.is_restricted ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
-      <span className="truncate">{channel.name}</span>
+      <span className={`truncate ${show ? "font-semibold" : ""}`}>{channel.name}</span>
+      {show ? (
+        <span className="ml-auto min-w-5 rounded-full bg-destructive px-1.5 text-center text-xs font-bold leading-5 text-destructive-foreground">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      ) : null}
     </button>
+  );
+}
+
+function WeeklyEmailToggle({ channelId, meId }: { channelId: string; meId: string }) {
+  const qc = useQueryClient();
+  const subQuery = useQuery({
+    queryKey: ["email-sub", channelId, meId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("channel_email_subscriptions")
+        .select("channel_id")
+        .eq("channel_id", channelId)
+        .eq("user_id", meId)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    },
+  });
+  const toggle = useMutation({
+    mutationFn: async (on: boolean) => {
+      const t = (supabase as any).from("channel_email_subscriptions");
+      const { error } = on
+        ? await t.insert({ channel_id: channelId, user_id: meId })
+        : await t.delete().eq("channel_id", channelId).eq("user_id", meId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, on) => {
+      qc.invalidateQueries({ queryKey: ["email-sub", channelId, meId] });
+      toast.success(on ? "You'll get this chat's weekly email." : "Weekly emails turned off.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+      Weekly emails
+      <Switch
+        checked={!!subQuery.data}
+        disabled={subQuery.isLoading || toggle.isPending}
+        onCheckedChange={(v) => toggle.mutate(v)}
+      />
+    </label>
   );
 }
 
