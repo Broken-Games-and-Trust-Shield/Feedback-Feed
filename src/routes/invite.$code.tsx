@@ -107,16 +107,18 @@ function InvitePage() {
           {nameQuery.data ? `Join ${nameQuery.data}` : "You've been invited"}
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          {nameQuery.isLoading
-            ? "Checking this invite…"
-            : nameQuery.data
-              ? "Accept the invite to start chatting with this community."
-              : "This invite link doesn't seem to work any more."}
+          {!user
+            ? "Sign in to see and accept this invite."
+            : nameQuery.isLoading
+              ? "Checking this invite…"
+              : nameQuery.data
+                ? "Accept the invite to start chatting with this community."
+                : "This invite link doesn't seem to work any more."}
         </p>
         <Button
           className="mt-6 w-full"
           onClick={join}
-          disabled={busy || loading || !nameQuery.data}
+          disabled={busy || loading || (!!user && !nameQuery.data)}
         >
           {user ? "Join server" : "Continue with Google"}
         </Button>
