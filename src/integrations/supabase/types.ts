@@ -49,6 +49,58 @@ export type Database = {
           },
         ]
       }
+      channel_email_subscriptions: {
+        Row: {
+          channel_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_email_subscriptions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_reads: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_reads_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_speakers: {
         Row: {
           channel_id: string
@@ -84,6 +136,7 @@ export type Database = {
           is_restricted: boolean
           name: string
           operator_only: boolean
+          send_emails: boolean
           server_id: string
           slowmode_seconds: number
         }
@@ -95,6 +148,7 @@ export type Database = {
           is_restricted?: boolean
           name: string
           operator_only?: boolean
+          send_emails?: boolean
           server_id: string
           slowmode_seconds?: number
         }
@@ -106,6 +160,7 @@ export type Database = {
           is_restricted?: boolean
           name?: string
           operator_only?: boolean
+          send_emails?: boolean
           server_id?: string
           slowmode_seconds?: number
         }
@@ -380,6 +435,13 @@ export type Database = {
         Returns: undefined
       }
       server_name_by_code: { Args: { _code: string }; Returns: string }
+      unread_counts: {
+        Args: { _server_id: string }
+        Returns: {
+          channel_id: string
+          unread: number
+        }[]
+      }
       user_id_by_username: { Args: { _username: string }; Returns: string }
     }
     Enums: {
