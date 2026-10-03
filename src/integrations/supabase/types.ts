@@ -129,6 +129,7 @@ export type Database = {
       }
       channels: {
         Row: {
+          allow_replies: boolean
           allow_uploads: boolean
           category_id: string | null
           created_at: string
@@ -141,6 +142,7 @@ export type Database = {
           slowmode_seconds: number
         }
         Insert: {
+          allow_replies?: boolean
           allow_uploads?: boolean
           category_id?: string | null
           created_at?: string
@@ -153,6 +155,7 @@ export type Database = {
           slowmode_seconds?: number
         }
         Update: {
+          allow_replies?: boolean
           allow_uploads?: boolean
           category_id?: string | null
           created_at?: string
@@ -240,6 +243,7 @@ export type Database = {
           created_at: string
           id: string
           is_removed: boolean
+          reply_to_id: string | null
           user_id: string
         }
         Insert: {
@@ -252,6 +256,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_removed?: boolean
+          reply_to_id?: string | null
           user_id: string
         }
         Update: {
@@ -264,6 +269,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_removed?: boolean
+          reply_to_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -272,6 +278,13 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
