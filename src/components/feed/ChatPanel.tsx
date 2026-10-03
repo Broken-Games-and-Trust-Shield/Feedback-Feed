@@ -562,3 +562,60 @@ function Attachment({ path, type, name }: { path: string; type: string; name: st
     </a>
   );
 }
+
+function ReplyQuote({ target, name }: { target: Message | undefined; name: string }) {
+  return (
+    <div className="mb-1 flex items-center gap-1.5 border-l-2 border-primary/60 pl-2 text-xs text-muted-foreground">
+      <Reply className="h-3 w-3 shrink-0" />
+      {target ? (
+        <span className="truncate">
+          <span className="font-semibold text-foreground/80">{name}</span>{" "}
+          {target.is_removed ? "[message removed]" : target.content || "(attachment)"}
+        </span>
+      ) : (
+        <span className="italic">Original message unavailable</span>
+      )}
+    </div>
+  );
+}
+
+function MessageText({ content, byName }: { content: string; byName: Record<string, Profile> }) {
+  const parts = content.split(/(@[^\s@]+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (!part.startsWith("@")) return part;
+        const trail = /[.,!?:;]+$/.exec(part)?.[0] ?? "";
+        const name = part.slice(1, part.length - trail.length);
+        const p = byName[name.toLowerCase()];
+        if (!p) return part;
+        return (
+          <span key={i}>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded bg-primary/15 px-1 font-medium text-primary hover:bg-primary/25"
+                >
+                  @{p.username}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64">
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <UserAvatar name={p.username} url={p.avatar_url} className="h-20 w-20 text-lg" />
+                  <div>
+                    <p className="font-semibold">{p.username}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Joined {new Date(p.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {trail}
+          </span>
+        );
+      })}
+    </>
+  );
+}
