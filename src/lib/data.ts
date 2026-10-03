@@ -31,6 +31,7 @@ export type Channel = {
   operator_only: boolean;
   allow_uploads: boolean;
   slowmode_seconds: number;
+  allow_replies?: boolean;
   category_id: string | null;
   created_at: string;
 };
@@ -54,7 +55,16 @@ export type Message = {
   attachment_type?: string | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
+  reply_to_id?: string | null;
 };
+
+export function mentionsUser(content: string, username: string) {
+  if (!username) return false;
+  const u = username.toLowerCase();
+  return (content.match(/@([^\s@]+)/g) ?? []).some(
+    (m) => m.slice(1).toLowerCase().replace(/[.,!?:;]+$/, "") === u,
+  );
+}
 
 
 export async function fetchProfile(userId: string) {
