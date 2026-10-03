@@ -148,14 +148,40 @@ function AppPage() {
     if (!server) return;
     const ch = supabase
       .channel(`unread-${server.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () =>
-        qc.invalidateQueries({ queryKey: ["unread", server.id] }),
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        async (payload) => {
+          qc.invalidateQueries({ queryKey: ["unread", server.id] });
+          const msg = payload.new as { user_id?: string; content?: string; channel_id?: string };
+          if (!msg || msg.user_id === meId || !msg.content) return;
+          const me = await qc.fetchQuery({
+            queryKey: ["profile", meId],
+            queryFn: () => fetchProfile(meId),
+          });
+          if (!me || !mentionsUser(msg.content, me.username)) return;
+          const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
+          const chName = chans.find((c) => c.id === msg.channel_id)?.name;
+          let author = "Someone";
+          try {
+            const ps = await fetchProfiles([msg.user_id!]);
+            author = ps[msg.user_id!]?.username ?? author;
+          } catch {
+            /* ignore */
+          }
+          toast(`${author} mentioned you`, {
+            description: chName ? `in #${chName}` : "in a channel",
+            action: chName
+              ? { label: "Open", onClick: () => setActiveChannelId(msg.channel_id!) }
+              : undefined,
+          });
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [server, qc]);
+  }, [server, qc, meId]);
 
   const activeUnread = activeChannelId ? (unread[activeChannelId] ?? 0) : 0;
   useEffect(() => {
@@ -346,6 +372,7 @@ function AppPage() {
               canChat={canChat}
               canModerate={isAdmin}
               slowmodeExempt={isOwner}
+              memberIds={members.map((m) => m.user_id)}
             />
           </>
         ) : (
@@ -678,6 +705,17 @@ function ChannelSettings({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const toggleReplies = useMutation({
+    mutationFn: async (value: boolean) => {
+      const { error } = await supabase
+        .from("channels")
+        .update({ allow_replies: value } as never)
+        .eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
   const toggleUploads = useMutation({
     mutationFn: async (value: boolean) => {
       const { error } = await supabase
@@ -825,6 +863,18 @@ function ChannelSettings({
           <Switch
             checked={!!(channel as Channel & { send_emails?: boolean }).send_emails}
             onCheckedChange={(v) => toggleEmails.mutate(v)}
+          />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+          <div className="pr-3">
+            <p className="text-sm font-medium">Replies</p>
+            <p className="text-xs text-muted-foreground">
+              Let people reply to specific messages (right-click a message → Reply).
+            </p>
+          </div>
+          <Switch
+            checked={!!channel.allow_replies}
+            onCheckedChange={(v) => toggleReplies.mutate(v)}
           />
         </div>
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
