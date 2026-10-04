@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Flag, Lock, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
+import { CornerUpLeft, Flag, Lock, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,11 @@ export function ChatPanel({
     messageId?: string | null;
   } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
+  const [selectedReplyId, setSelectedReplyId] = useState<string | null>(null);
+  const [connector, setConnector] = useState<{ path: string; top: number; left: number; width: number; height: number } | null>(null);
+  const activeReplyId = hoveredReplyId ?? selectedReplyId;
 
   const messagesQuery = useQuery({
     queryKey: ["messages", channel.id],
@@ -94,7 +99,64 @@ export function ChatPanel({
     for (const m of messages) map[m.id] = m;
     return map;
   }, [messages]);
+  const repliedToIds = useMemo(
+    () => new Set(messages.map((m) => m.reply_to_id).filter((id): id is string => !!id)),
+    [messages],
+  );
+  const activeTargetId = activeReplyId ? byId[activeReplyId]?.reply_to_id : null;
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+
+  useEffect(() => {
+    const list = messageListRef.current;
+    if (!list || !activeReplyId) {
+      setConnector(null);
+      return;
+    }
+    const update = () => {
+      const reply = list.querySelector<HTMLElement>(`[data-message-id="${activeReplyId}"]`);
+      const targetId = byId[activeReplyId]?.reply_to_id;
+      const target = targetId
+        ? list.querySelector<HTMLElement>(`[data-message-id="${targetId}"]`)
+        : null;
+      if (!reply || !target) {
+        setConnector(null);
+        return;
+      }
+      const box = list.getBoundingClientRect();
+      const from = reply.getBoundingClientRect();
+      const to = target.getBoundingClientRect();
+      const y1 = from.top - box.top + 14;
+      const y2 = to.top - box.top + 14;
+      if (y1 < 0 || y1 > box.height || y2 < 0 || y2 > box.height) {
+        setConnector(null);
+        return;
+      }
+      const x = Math.max(12, from.left - box.left + 56);
+      setConnector({
+        path: `M ${x + 16} ${y1} H ${x} V ${y2} H ${x + 14} M ${x + 14} ${y2} l -5 -4 M ${x + 14} ${y2} l -5 4`,
+        top: box.top,
+        left: box.left,
+        width: box.width,
+        height: box.height,
+      });
+    };
+    update();
+    list.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      list.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [activeReplyId, byId, messages]);
+
+  const showReplyTarget = (message: Message) => {
+    const target = message.reply_to_id
+      ? messageListRef.current?.querySelector<HTMLElement>(`[data-message-id="${message.reply_to_id}"]`)
+      : null;
+    if (!target) return;
+    setSelectedReplyId(message.id);
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const mentionQuery = /(?:^|\s)@([^@\n]{0,40})$/.exec(text)?.[1];
   const mentionMatches =
@@ -240,7 +302,12 @@ export function ChatPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
+      <div ref={messageListRef} className="relative flex-1 space-y-4 overflow-y-auto px-6 py-6">
+        {connector ? (
+          <svg aria-hidden="true" className="pointer-events-none fixed z-10 text-primary" style={{ top: connector.top, left: connector.left, width: connector.width, height: connector.height }}>
+            <path d={connector.path} fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        ) : null}
         {messages.length === 0 ? (
           <p className="pt-10 text-center text-sm text-muted-foreground">
             Nothing here yet. Say the first thing.
@@ -255,17 +322,23 @@ export function ChatPanel({
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
-                <div className="group flex gap-3">
+                 <div
+                   data-message-id={m.id}
+                   onMouseEnter={() => m.reply_to_id && setHoveredReplyId(m.id)}
+                   onMouseLeave={() => setHoveredReplyId(null)}
+                   className={`group flex gap-3 rounded-md transition-colors ${activeTargetId === m.id ? "bg-primary/20 ring-1 ring-primary/50" : repliedToIds.has(m.id) ? "bg-primary/5" : ""}`}
+                 >
                   <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} />
                   <div className="min-w-0 flex-1">
                     {m.reply_to_id ? (
-                      <ReplyQuote
+                       <ReplyQuote
                         target={byId[m.reply_to_id]}
                         name={
                           byId[m.reply_to_id]
                             ? (allProfiles[byId[m.reply_to_id]!.user_id]?.username ?? "Unknown")
                             : ""
                         }
+                        onClick={() => showReplyTarget(m)}
                       />
                     ) : null}
                     <div className="flex items-baseline gap-2">
@@ -568,10 +641,10 @@ function Attachment({ path, type, name }: { path: string; type: string; name: st
   );
 }
 
-function ReplyQuote({ target, name }: { target: Message | undefined; name: string }) {
+function ReplyQuote({ target, name, onClick }: { target: Message | undefined; name: string; onClick: () => void }) {
   return (
-    <div className="mb-1 flex items-center gap-1.5 border-l-2 border-primary/60 pl-2 text-xs text-muted-foreground">
-      <Reply className="h-3 w-3 shrink-0" />
+    <button type="button" onClick={onClick} disabled={!target} className="mb-1 flex max-w-full items-center gap-1.5 border-l-2 border-primary/60 pl-2 text-left text-xs text-muted-foreground hover:text-foreground disabled:cursor-default" title="Jump to replied message">
+      <CornerUpLeft className="h-3 w-3 shrink-0 text-primary" />
       {target ? (
         <span className="truncate">
           <span className="font-semibold text-foreground/80">{name}</span>{" "}
@@ -580,7 +653,7 @@ function ReplyQuote({ target, name }: { target: Message | undefined; name: strin
       ) : (
         <span className="italic">Original message unavailable</span>
       )}
-    </div>
+    </button>
   );
 }
 
