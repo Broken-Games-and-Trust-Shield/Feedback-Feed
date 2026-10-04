@@ -31,6 +31,7 @@ import {
   type Channel,
   type Message,
   type Profile,
+  splitMentions,
 } from "@/lib/data";
 import { checkMessageTone } from "@/lib/moderation.functions";
 
@@ -95,7 +96,7 @@ export function ChatPanel({
   }, [messages]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
 
-  const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1];
+  const mentionQuery = /(?:^|\s)@([^@\n]{0,40})$/.exec(text)?.[1];
   const mentionMatches =
     mentionQuery === undefined
       ? []
@@ -105,7 +106,7 @@ export function ChatPanel({
           )
           .slice(0, 6);
   const insertMention = (username: string) => {
-    setText((t) => t.replace(/@([^\s@]*)$/, `@${username} `));
+    setText((t) => t.replace(/@([^@\n]{0,40})$/, `@${username} `));
   };
 
   useEffect(() => {
@@ -315,9 +316,13 @@ export function ChatPanel({
 
               </ContextMenuTrigger>
               <ContextMenuContent>
-                {channel.allow_replies && canChat && !m.is_removed ? (
-                  <ContextMenuItem onClick={() => setReplyTo(m)}>
-                    <Reply className="mr-2 h-4 w-4" /> Reply
+                {canChat && !m.is_removed ? (
+                  <ContextMenuItem
+                    disabled={!channel.allow_replies}
+                    onSelect={() => setReplyTo(m)}
+                  >
+                    <Reply className="mr-2 h-4 w-4" />
+                    {channel.allow_replies ? "Reply" : "Reply (turned off in this chat)"}
                   </ContextMenuItem>
                 ) : null}
                 {m.user_id === meId ? (
@@ -580,15 +585,17 @@ function ReplyQuote({ target, name }: { target: Message | undefined; name: strin
 }
 
 function MessageText({ content, byName }: { content: string; byName: Record<string, Profile> }) {
-  const parts = content.split(/(@[^\s@]+)/g);
+  const parts = splitMentions(
+    content,
+    Object.values(byName).map((p) => p.username),
+  );
   return (
     <>
       {parts.map((part, i) => {
-        if (!part.startsWith("@")) return part;
-        const trail = /[.,!?:;]+$/.exec(part)?.[0] ?? "";
-        const name = part.slice(1, part.length - trail.length);
-        const p = byName[name.toLowerCase()];
-        if (!p) return part;
+        if (typeof part === "string") return <span key={i}>{part}</span>;
+        const p = byName[part.name.toLowerCase()];
+        const trail = "";
+        if (!p) return <span key={i}>@{part.name}</span>;
         return (
           <span key={i}>
             <Popover>
