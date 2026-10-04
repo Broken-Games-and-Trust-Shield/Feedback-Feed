@@ -61,7 +61,7 @@ export function ChatPanel({
   const messageListRef = useRef<HTMLDivElement>(null);
   const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
   const [selectedReplyId, setSelectedReplyId] = useState<string | null>(null);
-  const [connector, setConnector] = useState<string | null>(null);
+  const [connector, setConnector] = useState<{ path: string; top: number; left: number; width: number; height: number } | null>(null);
   const activeReplyId = hoveredReplyId ?? selectedReplyId;
 
   const messagesQuery = useQuery({
@@ -132,7 +132,13 @@ export function ChatPanel({
         return;
       }
       const x = Math.max(12, from.left - box.left + 56);
-      setConnector(`M ${x + 16} ${y1} H ${x} V ${y2} H ${x + 14}`);
+      setConnector({
+        path: `M ${x + 16} ${y1} H ${x} V ${y2} H ${x + 14} M ${x + 14} ${y2} l -5 -4 M ${x + 14} ${y2} l -5 4`,
+        top: box.top,
+        left: box.left,
+        width: box.width,
+        height: box.height,
+      });
     };
     update();
     list.addEventListener("scroll", update);
@@ -298,9 +304,8 @@ export function ChatPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={messageListRef} className="relative flex-1 space-y-4 overflow-y-auto px-6 py-6">
         {connector ? (
-          <svg aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-0 block h-0 w-full overflow-visible" style={{ overflow: "visible" }}>
-            <path d={connector} fill="none" stroke="currentColor" strokeWidth="2" className="text-primary" />
-            <path d={connector ? `M ${Number(connector.match(/H (\d+(?:\.\d+)?)$/)?.[1] ?? 0) - 5} 0` : ""} className="hidden" />
+          <svg aria-hidden="true" className="pointer-events-none fixed z-10 text-primary" style={{ top: connector.top, left: connector.left, width: connector.width, height: connector.height }}>
+            <path d={connector.path} fill="none" stroke="currentColor" strokeWidth="2" />
           </svg>
         ) : null}
         {messages.length === 0 ? (
