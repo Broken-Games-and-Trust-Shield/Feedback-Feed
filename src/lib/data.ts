@@ -60,12 +60,38 @@ export type Message = {
 
 export function mentionsUser(content: string, username: string) {
   if (!username) return false;
-  const u = username.toLowerCase();
-  return (content.match(/@([^\s@]+)/g) ?? []).some(
-    (m) => m.slice(1).toLowerCase().replace(/[.,!?:;]+$/, "") === u,
-  );
+  return splitMentions(content, [username]).some((p) => typeof p !== "string");
 }
 
+/** Splits text into plain strings and { name } mention tokens, matching known usernames (spaces allowed). */
+export function splitMentions(content: string, usernames: string[]) {
+  const names = [...usernames].sort((a, b) => b.length - a.length);
+  const out: Array<string | { name: string }> = [];
+  let buf = "";
+  let i = 0;
+  const lower = content.toLowerCase();
+  while (i < content.length) {
+    if (content[i] === "@" && (i === 0 || /\s/.test(content[i - 1]!))) {
+      const rest = lower.slice(i + 1);
+      const hit = names.find((n) => {
+        if (!n || !rest.startsWith(n.toLowerCase())) return false;
+        const next = rest[n.length];
+        return next === undefined || /[\s.,!?:;]/.test(next);
+      });
+      if (hit) {
+        if (buf) out.push(buf);
+        buf = "";
+        out.push({ name: hit });
+        i += hit.length + 1;
+        continue;
+      }
+    }
+    buf += content[i];
+    i++;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
 
 export async function fetchProfile(userId: string) {
   const { data, error } = await supabase
