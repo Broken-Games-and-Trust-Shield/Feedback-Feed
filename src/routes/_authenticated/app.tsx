@@ -156,7 +156,7 @@ function AppPage() {
         async (payload) => {
           qc.invalidateQueries({ queryKey: ["unread", server.id] });
            const msg = payload.new as { user_id?: string; content?: string; channel_id?: string; reply_to_id?: string | null };
-           if (!msg || msg.user_id === meId || !msg.channel_id) return;
+           if (!msg || !msg.user_id || msg.user_id === meId || !msg.channel_id) return;
            const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
            const chName = chans.find((c) => c.id === msg.channel_id)?.name;
            if (!chName) return;
