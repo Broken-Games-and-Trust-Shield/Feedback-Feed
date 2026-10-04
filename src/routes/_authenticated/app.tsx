@@ -155,27 +155,36 @@ function AppPage() {
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
           qc.invalidateQueries({ queryKey: ["unread", server.id] });
-          const msg = payload.new as { user_id?: string; content?: string; channel_id?: string };
-          if (!msg || msg.user_id === meId || !msg.content) return;
+           const msg = payload.new as { user_id?: string; content?: string; channel_id?: string; reply_to_id?: string | null };
+           if (!msg || msg.user_id === meId || !msg.channel_id) return;
+           const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
+           const chName = chans.find((c) => c.id === msg.channel_id)?.name;
+           if (!chName) return;
           const me = await qc.fetchQuery({
             queryKey: ["profile", meId],
             queryFn: () => fetchProfile(meId),
           });
-          if (!me || !mentionsUser(msg.content, me.username)) return;
-          const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
-          const chName = chans.find((c) => c.id === msg.channel_id)?.name;
+           const mentioned = !!me && mentionsUser(msg.content ?? "", me.username);
+           let repliedToMe = false;
+           if (msg.reply_to_id) {
+             const { data: original } = await supabase
+               .from("messages")
+               .select("user_id, channel_id")
+               .eq("id", msg.reply_to_id)
+               .maybeSingle();
+             repliedToMe = original?.user_id === meId && original?.channel_id === msg.channel_id;
+           }
+           if (!mentioned && !repliedToMe) return;
           let author = "Someone";
           try {
-            const ps = await fetchProfiles([msg.user_id!]);
-            author = ps[msg.user_id!]?.username ?? author;
+             const ps = await fetchProfiles([msg.user_id]);
+             author = ps[msg.user_id]?.username ?? author;
           } catch {
             /* ignore */
           }
-          toast(`${author} mentioned you`, {
-            description: chName ? `in #${chName}` : "in a channel",
-            action: chName
-              ? { label: "Open", onClick: () => setActiveChannelId(msg.channel_id!) }
-              : undefined,
+           toast(`${author} ${repliedToMe ? "replied to you" : "mentioned you"}`, {
+             description: `in #${chName}`,
+             action: { label: "Open", onClick: () => setActiveChannelId(msg.channel_id ?? null) },
           });
         },
       )
