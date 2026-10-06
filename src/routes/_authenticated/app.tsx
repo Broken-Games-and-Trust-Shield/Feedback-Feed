@@ -122,6 +122,21 @@ function AppPage() {
   });
   const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
   const [collapsedTabs, setCollapsedTabs] = useState<string[]>([]);
+  const [pings, setPings] = useState<
+    { id: string; author: string; kind: string; channelName: string; channelId: string; preview: string }[]
+  >([]);
+  const bypassQuery = useQuery({
+    queryKey: ["slowmode-bypass", activeChannelId],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("channel_slowmode_bypass")
+        .select("user_id")
+        .eq("channel_id", activeChannelId);
+      return ((data ?? []) as { user_id: string }[]).map((r) => r.user_id);
+    },
+    enabled: !!activeChannelId,
+  });
+  const bypassIds = bypassQuery.data ?? [];
 
   useEffect(() => {
     if (channels.length === 0) setActiveChannelId(null);
@@ -182,10 +197,15 @@ function AppPage() {
           } catch {
             /* ignore */
           }
-           toast(`${author} ${repliedToMe ? "replied to you" : "mentioned you"}`, {
-             description: `in #${chName}`,
-             action: { label: "Open", onClick: () => setActiveChannelId(msg.channel_id ?? null) },
-          });
+           const ping = {
+             id: (payload.new as { id: string }).id,
+             author,
+             kind: repliedToMe ? "replied to you" : "mentioned you",
+             channelName: chName,
+             channelId: msg.channel_id,
+             preview: (msg.content ?? "").slice(0, 140),
+           };
+           setPings((x) => [...x.filter((y) => y.id !== ping.id), ping].slice(-4));
         },
       )
       .subscribe();
@@ -365,12 +385,11 @@ function AppPage() {
                   categories={categories}
                   members={members.map((m) => m.user_id)}
                   speakers={speakers.map((s) => s.user_id)}
+                  moderators={members.filter((m) => m.role === "admin").map((m) => m.user_id)}
+                  bypass={bypassIds}
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
-                {(channel as Channel & { send_emails?: boolean }).send_emails ? (
-                  <WeeklyEmailToggle channelId={channel.id} meId={meId} />
-                ) : null}
                 {isOwner ? (
                   <InviteDialog serverId={server.id} inviteCode={server.invite_code} />
                 ) : null}
@@ -382,7 +401,7 @@ function AppPage() {
               meId={meId}
               canChat={canChat}
               canModerate={isAdmin}
-              slowmodeExempt={isOwner}
+              slowmodeExempt={isOwner || (isAdmin && bypassIds.includes(meId))}
               memberIds={members.map((m) => m.user_id)}
             />
           </>
@@ -416,6 +435,39 @@ function AppPage() {
         onOpenChange={setProfileOpen}
       />
       <PendingInvites meId={meId} onJoined={() => qc.invalidateQueries()} />
+      {pings.length > 0 ? (
+        <div className="fixed right-4 top-4 z-50 w-72 space-y-2">
+          {pings.map((p) => (
+            <div key={p.id} className="rounded-xl bg-surface p-4 glow-ring">
+              <p className="text-sm">
+                <span className="font-semibold">{p.author}</span> {p.kind} in{" "}
+                <span className="font-semibold">#{p.channelName}</span>
+              </p>
+              {p.preview ? (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.preview}</p>
+              ) : null}
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setActiveChannelId(p.channelId);
+                    setPings((x) => x.filter((y) => y.id !== p.id));
+                  }}
+                >
+                  Open
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPings((x) => x.filter((y) => y.id !== p.id))}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -648,11 +700,15 @@ function ChannelSettings({
   categories,
   members,
   speakers,
+  moderators,
+  bypass,
 }: {
   channel: Channel;
   categories: ChannelCategory[];
   members: string[];
   speakers: string[];
+  moderators: string[];
+  bypass: string[];
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -738,15 +794,15 @@ function ChannelSettings({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
     onError: (e: Error) => toast.error(e.message),
   });
-  const toggleEmails = useMutation({
-    mutationFn: async (value: boolean) => {
-      const { error } = await supabase
-        .from("channels")
-        .update({ send_emails: value } as never)
-        .eq("id", channel.id);
+  const toggleBypass = useMutation({
+    mutationFn: async ({ userId, allow }: { userId: string; allow: boolean }) => {
+      const t = (supabase as any).from("channel_slowmode_bypass");
+      const { error } = allow
+        ? await t.insert({ channel_id: channel.id, user_id: userId })
+        : await t.delete().eq("channel_id", channel.id).eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", channel.server_id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["slowmode-bypass", channel.id] }),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -866,18 +922,6 @@ function ChannelSettings({
         ) : null}
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
           <div className="pr-3">
-            <p className="text-sm font-medium">Send emails</p>
-            <p className="text-xs text-muted-foreground">
-              Let members sign up for a weekly email with this chat's conversation.
-            </p>
-          </div>
-          <Switch
-            checked={!!(channel as Channel & { send_emails?: boolean }).send_emails}
-            onCheckedChange={(v) => toggleEmails.mutate(v)}
-          />
-        </div>
-        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-          <div className="pr-3">
             <p className="text-sm font-medium">Replies</p>
             <p className="text-xs text-muted-foreground">
               Let people reply to specific messages (right-click a message → Reply).
@@ -929,6 +973,26 @@ function ChannelSettings({
                 </option>
               ))}
             </select>
+          ) : null}
+          {channel.slowmode_seconds > 0 ? (
+            <div className="mt-3 space-y-1">
+              <p className="text-xs font-medium">Moderators who skip slow mode</p>
+              {moderators.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No moderators in this server yet. Regular members can never skip slow mode.
+                </p>
+              ) : (
+                moderators.map((uid) => (
+                  <label key={uid} className="flex items-center justify-between text-sm">
+                    <span>{profiles[uid]?.username ?? "Moderator"}</span>
+                    <Switch
+                      checked={bypass.includes(uid)}
+                      onCheckedChange={(v) => toggleBypass.mutate({ userId: uid, allow: v })}
+                    />
+                  </label>
+                ))
+              )}
+            </div>
           ) : null}
         </div>
 
