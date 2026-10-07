@@ -1,3 +1,5 @@
+import { Pencil as PencilIcon } from "lucide-react";
+import type { Message, Profile } from "@/lib/data";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -214,6 +216,60 @@ function AppPage() {
     };
   }, [server, qc, meId]);
 
+  // Missed mentions/replies while offline
+  useEffect(() => {
+    if (!server || !meId) return;
+    let cancelled = false;
+    (async () => {
+      const chans = await qc.ensureQueryData({
+        queryKey: ["channels", server.id],
+        queryFn: () => fetchChannels(server.id),
+      });
+      if (!chans.length) return;
+      const me = await qc.fetchQuery({ queryKey: ["profile", meId], queryFn: () => fetchProfile(meId) });
+      if (!me) return;
+      const { data: reads } = await (supabase as any)
+        .from("channel_reads").select("channel_id, last_read_at").eq("user_id", meId);
+      const readMap: Record<string, string> = {};
+      for (const r of (reads ?? []) as { channel_id: string; last_read_at: string }[]) readMap[r.channel_id] = r.last_read_at;
+      const { data: mem } = await supabase.from("server_members").select("joined_at")
+        .eq("server_id", server.id).eq("user_id", meId).maybeSingle();
+      const joined = mem?.joined_at ?? new Date().toISOString();
+      const seenKey = `ff-seen-pings-${meId}`;
+      const seen = new Set<string>(JSON.parse(localStorage.getItem(seenKey) ?? "[]"));
+      const found: Message[] = [];
+      for (const c of chans) {
+        const since = readMap[c.id] ?? joined;
+        const { data } = await supabase.from("messages").select("*")
+          .eq("channel_id", c.id).neq("user_id", meId).eq("is_removed", false)
+          .gt("created_at", since).order("created_at").limit(200);
+        found.push(...((data ?? []) as Message[]));
+      }
+      const replyIds = [...new Set(found.map((m) => m.reply_to_id).filter(Boolean) as string[])];
+      const mine = new Set<string>();
+      if (replyIds.length) {
+        const { data } = await supabase.from("messages").select("id").in("id", replyIds).eq("user_id", meId);
+        for (const r of data ?? []) mine.add(r.id);
+      }
+      const hits = found.filter((m) => !seen.has(m.id) && ((m.reply_to_id && mine.has(m.reply_to_id)) || mentionsUser(m.content ?? "", me.username)));
+      if (!hits.length || cancelled) return;
+      let names: Record<string, Profile> = {};
+      try { names = await fetchProfiles([...new Set(hits.map((h) => h.user_id))]); } catch { /* ignore */ }
+      const pingsNew = hits.slice(-4).map((m) => ({
+        id: m.id,
+        author: names[m.user_id]?.username ?? "Someone",
+        kind: m.reply_to_id && mine.has(m.reply_to_id) ? "replied to you" : "mentioned you",
+        channelName: chans.find((c) => c.id === m.channel_id)?.name ?? "",
+        channelId: m.channel_id,
+        preview: (m.content ?? "").slice(0, 140),
+      }));
+      for (const h of hits) seen.add(h.id);
+      localStorage.setItem(seenKey, JSON.stringify([...seen].slice(-500)));
+      setPings((x) => [...x.filter((y) => !pingsNew.some((n) => n.id === y.id)), ...pingsNew].slice(-4));
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, [server?.id, meId, qc]);
+
   const activeUnread = activeChannelId ? (unread[activeChannelId] ?? 0) : 0;
   useEffect(() => {
     if (!activeChannelId || !meId) return;
@@ -277,6 +333,18 @@ function AppPage() {
           </span>
           {server ? (
             <div className="flex items-center gap-1">
+              {isOwner ? (
+                <RenameDialog
+                  title="Rename server"
+                  current={server.name}
+                  onSave={async (name) => {
+                    const { error } = await supabase.from("servers").update({ name }).eq("id", server.id);
+                    if (error) throw error;
+                    qc.invalidateQueries({ queryKey: ["servers"] });
+                    qc.invalidateQueries();
+                  }}
+                />
+              ) : null}
               {isAdmin ? <ReportsInbox serverId={server.id} /> : null}
               <ServerMenu serverId={server.id} isOwner={isOwner} meId={meId} />
             </div>
@@ -848,7 +916,19 @@ function ChannelSettings({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>#{channel.name} settings</DialogTitle>
+          <DialogTitle className="flex items-center gap-1">
+            #{channel.name} settings
+            <RenameDialog
+              title="Rename channel"
+              current={channel.name}
+              onSave={async (raw) => {
+                const name = raw.toLowerCase().replace(/\s+/g, "-");
+                const { error } = await supabase.from("channels").update({ name }).eq("id", channel.id);
+                if (error) throw error;
+                qc.invalidateQueries({ queryKey: ["channels", channel.server_id] });
+              }}
+            />
+          </DialogTitle>
           <DialogDescription>Choose who is allowed to post here.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -1377,6 +1457,53 @@ function TabMenu({ category }: { category: ChannelCategory }) {
         <Button variant="destructive" className="gap-2" onClick={() => remove.mutate()}>
           <Trash2 className="h-4 w-4" /> Delete tab
         </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RenameDialog({
+  title,
+  current,
+  onSave,
+}: {
+  title: string;
+  current: string;
+  onSave: (name: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const n = name.trim();
+    if (!n || n.length > 100) { toast.error("Name must be 1–100 characters"); return; }
+    setBusy(true);
+    try {
+      await onSave(n);
+      toast.success("Renamed");
+      setOpen(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setName(current); }}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" title={title} className="h-7 w-7">
+          <PencilIcon className="h-3.5 w-3.5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>Pick a new name.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-3">
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} autoFocus />
+          <Button type="submit" disabled={busy} className="w-full">Save</Button>
+        </form>
       </DialogContent>
     </Dialog>
   );
