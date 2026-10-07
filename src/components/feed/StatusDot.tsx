@@ -20,7 +20,7 @@ export function StatusDot({
   if (status === "dnd")
     return (
       <span title="Do not disturb" className={cn(base, "h-4 w-4 bg-destructive", className)}>
-        <span className="h-[3px] w-2 rounded-full bg-background" />
+        <span className="h-[3px] w-2 rounded-full bg-status-line" />
       </span>
     );
   if (status === "idle")
