@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "./UserAvatar";
+import { ProfileCard } from "./ProfileCard";
 import { ReportDialog } from "./ReportDialog";
 import {
   fetchMessages,
@@ -328,7 +329,15 @@ export function ChatPanel({
                    onMouseLeave={() => setHoveredReplyId(null)}
                    className={`group flex gap-3 rounded-md transition-colors ${activeTargetId === m.id ? "bg-primary/20 ring-1 ring-primary/50" : repliedToIds.has(m.id) ? "bg-primary/5" : ""}`}
                  >
-                  <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} />
+                  {p ? (
+                    <ProfileCard profile={p}>
+                      <button type="button" className="h-9 shrink-0 rounded-full">
+                        <UserAvatar name={p.username} url={p.avatar_url} />
+                      </button>
+                    </ProfileCard>
+                  ) : (
+                    <UserAvatar name="?" url={null} />
+                  )}
                   <div className="min-w-0 flex-1">
                     {m.reply_to_id ? (
                        <ReplyQuote
@@ -342,7 +351,15 @@ export function ChatPanel({
                       />
                     ) : null}
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold">{p?.username ?? "Unknown"}</span>
+                      {p ? (
+                        <ProfileCard profile={p}>
+                          <button type="button" className="text-sm font-semibold hover:underline">
+                            {p.username}
+                          </button>
+                        </ProfileCard>
+                      ) : (
+                        <span className="text-sm font-semibold">Unknown</span>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {new Date(m.created_at).toLocaleString([], {
                           month: "short",
@@ -671,27 +688,14 @@ function MessageText({ content, byName }: { content: string; byName: Record<stri
         if (!p) return <span key={i}>@{part.name}</span>;
         return (
           <span key={i}>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="rounded bg-primary/15 px-1 font-medium text-primary hover:bg-primary/25"
-                >
-                  @{p.username}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64">
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <UserAvatar name={p.username} url={p.avatar_url} className="h-20 w-20 text-lg" />
-                  <div>
-                    <p className="font-semibold">{p.username}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Joined {new Date(p.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <ProfileCard profile={p}>
+              <button
+                type="button"
+                className="rounded bg-primary/15 px-1 font-medium text-primary hover:bg-primary/25"
+              >
+                @{p.username}
+              </button>
+            </ProfileCard>
             {trail}
           </span>
         );

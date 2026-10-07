@@ -5,6 +5,7 @@ export type Profile = {
   username: string;
   avatar_url: string | null;
   created_at: string;
+  status?: string;
 };
 
 export type Server = {
