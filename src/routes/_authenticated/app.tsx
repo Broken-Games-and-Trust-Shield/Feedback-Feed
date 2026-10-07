@@ -1,4 +1,5 @@
 import { Pencil as PencilIcon } from "lucide-react";
+import type { Message, Profile } from "@/lib/data";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1475,7 +1476,7 @@ function RenameDialog({
   const [busy, setBusy] = useState(false);
   const save = async () => {
     const n = name.trim();
-    if (!n || n.length > 100) return toast.error("Name must be 1–100 characters");
+    if (!n || n.length > 100) { toast.error("Name must be 1–100 characters"); return; }
     setBusy(true);
     try {
       await onSave(n);
