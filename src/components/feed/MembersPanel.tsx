@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "./UserAvatar";
+import { ProfileCard } from "./ProfileCard";
+import { StatusDot } from "./StatusDot";
 import { ReportDialog } from "./ReportDialog";
 import { fetchProfiles, type Member, type Profile, type Server } from "@/lib/data";
 
@@ -149,7 +151,16 @@ export function MembersPanel({
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
                 <li className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
-                  <UserAvatar name={p?.username ?? "?"} url={p?.avatar_url} className="h-7 w-7" />
+                  {p ? (
+                    <ProfileCard profile={p}>
+                      <button type="button" className="relative shrink-0 rounded-full">
+                        <UserAvatar name={p.username} url={p.avatar_url} className="h-7 w-7" />
+                        <StatusDot userId={p.id} status={(p as { status?: string }).status} className="h-3 w-3 [&>svg]:h-3 [&>svg]:w-3" />
+                      </button>
+                    </ProfileCard>
+                  ) : (
+                    <UserAvatar name="?" url={null} className="h-7 w-7" />
+                  )}
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {p?.username ?? "Unknown"}
                   </span>

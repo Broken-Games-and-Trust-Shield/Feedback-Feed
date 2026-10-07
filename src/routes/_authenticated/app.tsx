@@ -1,3 +1,4 @@
+import { startPresence } from "@/lib/presence";
 import { Pencil as PencilIcon } from "lucide-react";
 import type { Message, Profile } from "@/lib/data";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -146,6 +147,11 @@ function AppPage() {
   }, [channels, activeChannelId]);
 
   const channel = channels.find((c) => c.id === activeChannelId) ?? null;
+
+  useEffect(() => {
+    if (!meId) return;
+    return startPresence(meId);
+  }, [meId]);
 
   const unreadQuery = useQuery({
     queryKey: ["unread", server?.id, meId],

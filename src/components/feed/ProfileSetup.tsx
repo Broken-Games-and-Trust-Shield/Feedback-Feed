@@ -20,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { UserAvatar } from "./UserAvatar";
+import { StatusDot } from "./StatusDot";
 import { fileToAvatarDataUrl } from "./avatar-utils";
 import { deleteMyAccount } from "@/lib/account.functions";
 import type { Profile } from "@/lib/data";
@@ -62,6 +63,17 @@ export function ProfileSetup({
       window.location.href = "/";
     },
     onError: () => toast.error("Could not delete your account. Please try again."),
+  });
+
+  const [status, setStatus] = useState<string>((profile as { status?: string } | null)?.status ?? "online");
+  const setMyStatus = useMutation({
+    mutationFn: async (value: string) => {
+      setStatus(value);
+      const { error } = await supabase.from("profiles").update({ status: value } as never).eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["profile", userId] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const save = useMutation({
@@ -124,6 +136,32 @@ export function ProfileSetup({
             onChange={(e) => setUsername(e.target.value)}
           />
         </div>
+        {!first ? (
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { v: "online", label: "Online" },
+                { v: "idle", label: "Idle" },
+                { v: "dnd", label: "Do not disturb" },
+              ].map((o) => (
+                <Button
+                  key={o.v}
+                  type="button"
+                  size="sm"
+                  variant={status === o.v ? "default" : "outline"}
+                  onClick={() => setMyStatus.mutate(o.v)}
+                  className="gap-2"
+                >
+                  <span className="relative h-4 w-4">
+                    <StatusDot userId={userId} status={o.v} className="ring-0" />
+                  </span>
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save profile"}
         </Button>
