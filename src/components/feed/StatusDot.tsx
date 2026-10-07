@@ -10,7 +10,7 @@ export function StatusDot({
   className,
 }: {
   userId: string;
-  status?: string | null;
+  status?: string | null | undefined;
   className?: string;
 }) {
   const isOnline = useIsOnline(userId);
