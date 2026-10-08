@@ -153,6 +153,39 @@ function AppPage() {
     return startPresence(meId);
   }, [meId]);
 
+  // Auto-idle after 2 minutes of no activity
+  useEffect(() => {
+    if (!meId) return;
+    const flagKey = `ff-auto-idle-${meId}`;
+    let timer: ReturnType<typeof setTimeout>;
+    const setStatus = async (status: string) => {
+      await supabase.from("profiles").update({ status } as never).eq("id", meId);
+      qc.invalidateQueries({ queryKey: ["profile", meId] });
+    };
+    const goIdle = async () => {
+      const p = await fetchProfile(meId).catch(() => null);
+      if ((p?.status ?? "online") === "online") {
+        localStorage.setItem(flagKey, "1");
+        await setStatus("idle");
+      }
+    };
+    const onActivity = () => {
+      clearTimeout(timer);
+      timer = setTimeout(goIdle, 120_000);
+      if (localStorage.getItem(flagKey)) {
+        localStorage.removeItem(flagKey);
+        void setStatus("online");
+      }
+    };
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"] as const;
+    for (const e of events) window.addEventListener(e, onActivity, { passive: true });
+    onActivity();
+    return () => {
+      clearTimeout(timer);
+      for (const e of events) window.removeEventListener(e, onActivity);
+    };
+  }, [meId, qc]);
+
   const unreadQuery = useQuery({
     queryKey: ["unread", server?.id, meId],
     queryFn: async () => {
@@ -198,6 +231,7 @@ function AppPage() {
              repliedToMe = original?.user_id === meId && original?.channel_id === msg.channel_id;
            }
            if (!mentioned && !repliedToMe) return;
+           if (me?.status === "dnd") return;
           let author = "Someone";
           try {
              const ps = await fetchProfiles([msg.user_id]);
@@ -259,6 +293,11 @@ function AppPage() {
       }
       const hits = found.filter((m) => !seen.has(m.id) && ((m.reply_to_id && mine.has(m.reply_to_id)) || mentionsUser(m.content ?? "", me.username)));
       if (!hits.length || cancelled) return;
+      if (me.status === "dnd") {
+        for (const h of hits) seen.add(h.id);
+        localStorage.setItem(seenKey, JSON.stringify([...seen].slice(-500)));
+        return;
+      }
       let names: Record<string, Profile> = {};
       try { names = await fetchProfiles([...new Set(hits.map((h) => h.user_id))]); } catch { /* ignore */ }
       const pingsNew = hits.slice(-4).map((m) => ({
@@ -477,6 +516,7 @@ function AppPage() {
               canModerate={isAdmin}
               slowmodeExempt={isOwner || (isAdmin && bypassIds.includes(meId))}
               memberIds={members.map((m) => m.user_id)}
+              isOperator={isOwner}
             />
           </>
         ) : (
