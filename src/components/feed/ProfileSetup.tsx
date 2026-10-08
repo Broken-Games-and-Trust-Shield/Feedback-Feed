@@ -69,6 +69,7 @@ export function ProfileSetup({
   const setMyStatus = useMutation({
     mutationFn: async (value: string) => {
       setStatus(value);
+      localStorage.removeItem(`ff-auto-idle-${userId}`);
       const { error } = await supabase.from("profiles").update({ status: value } as never).eq("id", userId);
       if (error) throw error;
     },
