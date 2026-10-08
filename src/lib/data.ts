@@ -14,6 +14,7 @@ export type Server = {
   owner_id: string;
   invite_code: string;
   created_at: string;
+  rules_channel_id?: string | null;
 };
 
 export type Member = {

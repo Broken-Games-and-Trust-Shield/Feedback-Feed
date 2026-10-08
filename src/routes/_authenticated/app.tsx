@@ -39,6 +39,7 @@ import { ProfileSetup } from "@/components/feed/ProfileSetup";
 import { ChatPanel } from "@/components/feed/ChatPanel";
 import { MembersPanel } from "@/components/feed/MembersPanel";
 import { ReportsInbox } from "@/components/feed/ReportsInbox";
+import { RulesGate } from "@/components/feed/RulesGate";
 import {
   fetchCategories,
   fetchChannels,
@@ -500,6 +501,7 @@ function AppPage() {
                   speakers={speakers.map((s) => s.user_id)}
                   moderators={members.filter((m) => m.role === "admin").map((m) => m.user_id)}
                   bypass={bypassIds}
+                  isRules={server.rules_channel_id === channel.id}
                 />
               ) : null}
               <div className="ml-auto flex items-center gap-2">
@@ -518,6 +520,15 @@ function AppPage() {
               memberIds={members.map((m) => m.user_id)}
               isOperator={isOwner}
             />
+            {server.rules_channel_id && !isOwner ? (
+              <RulesGate
+                key={server.id}
+                serverId={server.id}
+                serverName={server.name}
+                channelId={server.rules_channel_id}
+                meId={meId}
+              />
+            ) : null}
           </>
         ) : (
           <EmptyState hasServer={!!server} meId={meId} />
@@ -816,6 +827,7 @@ function ChannelSettings({
   speakers,
   moderators,
   bypass,
+  isRules,
 }: {
   channel: Channel;
   categories: ChannelCategory[];
@@ -823,6 +835,7 @@ function ChannelSettings({
   speakers: string[];
   moderators: string[];
   bypass: string[];
+  isRules?: boolean;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -1047,6 +1060,26 @@ function ChannelSettings({
           </>
         ) : null}
         <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+          <div className="pr-3">
+            <p className="text-sm font-medium">Rules channel</p>
+            <p className="text-xs text-muted-foreground">
+              New members must scroll through this chat before entering the server. Only one per server.
+            </p>
+          </div>
+          <Switch
+            checked={!!isRules}
+            onCheckedChange={async (v) => {
+              const { error } = await supabase
+                .from("servers")
+                .update({ rules_channel_id: v ? channel.id : null } as never)
+                .eq("id", channel.server_id);
+              if (error) toast.error(error.message);
+              else qc.invalidateQueries({ queryKey: ["servers"] });
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+
           <div className="pr-3">
             <p className="text-sm font-medium">Replies</p>
             <p className="text-xs text-muted-foreground">
