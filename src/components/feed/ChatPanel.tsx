@@ -43,7 +43,9 @@ export function ChatPanel({
   canModerate,
   slowmodeExempt = false,
   memberIds = [],
+  isOperator = false,
 }: {
+  isOperator?: boolean;
   channel: Channel;
   meId: string;
   canChat: boolean;
@@ -319,7 +321,8 @@ export function ChatPanel({
           const secondsLeft = Math.ceil(
             (new Date(m.created_at).getTime() + 30000 - now) / 1000,
           );
-          const canDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
+          const ownDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
+          const canDelete = ownDelete || isOperator;
           return (
             <ContextMenu key={m.id}>
               <ContextMenuTrigger asChild>
@@ -375,7 +378,7 @@ export function ChatPanel({
                           aria-label="Delete message"
                         >
                           <Trash2 className="h-3.5 w-3.5 hover:text-destructive" />
-                          {secondsLeft}s
+                          {ownDelete && !isOperator ? `${secondsLeft}s` : null}
                         </button>
                       ) : null}
                     </div>
