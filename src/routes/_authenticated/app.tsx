@@ -1095,7 +1095,7 @@ function ChannelSettings({
           <div className="pr-3">
             <p className="text-sm font-medium">File uploads</p>
             <p className="text-xs text-muted-foreground">
-              Let people attach photos and videos up to 300 MB.
+              Let people attach photos and videos up to 1 GB.
             </p>
           </div>
           <Switch
