@@ -225,7 +225,7 @@ export function ChatPanel({
       } | null = null;
 
       if (upload) {
-        if (upload.size > 300 * 1024 * 1024) throw new Error("That file is bigger than 300 MB.");
+        if (upload.size > 1024 * 1024 * 1024) throw new Error("That file is bigger than 1 GB.");
         setUploading(true);
         try {
           const ext = upload.name.includes(".") ? upload.name.split(".").pop() : "bin";
@@ -508,8 +508,8 @@ export function ChatPanel({
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
-                      if (f && f.size > 300 * 1024 * 1024) {
-                        toast.error("Photos and videos must be 300 MB or smaller.");
+                      if (f && f.size > 1024 * 1024 * 1024) {
+                        toast.error("Photos and videos must be 1 GB or smaller.");
                         e.target.value = "";
                         return;
                       }
