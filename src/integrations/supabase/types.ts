@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -339,6 +339,32 @@ export type Database = {
         }
         Relationships: []
       }
+      rules_acceptances: {
+        Row: {
+          accepted_at: string
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rules_acceptances_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       server_bans: {
         Row: {
           banned_by: string
@@ -448,6 +474,7 @@ export type Database = {
           invite_code: string
           name: string
           owner_id: string
+          rules_channel_id: string | null
         }
         Insert: {
           created_at?: string
@@ -455,6 +482,7 @@ export type Database = {
           invite_code?: string
           name: string
           owner_id: string
+          rules_channel_id?: string | null
         }
         Update: {
           created_at?: string
@@ -462,8 +490,17 @@ export type Database = {
           invite_code?: string
           name?: string
           owner_id?: string
+          rules_channel_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "servers_rules_channel_id_fkey"
+            columns: ["rules_channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
