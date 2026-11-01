@@ -470,6 +470,7 @@ export function ChatPanel({
                         path={m.attachment_url}
                         type={m.attachment_type ?? ""}
                         name={m.attachment_name ?? "file"}
+                        size={m.attachment_size}
                       />
                     ) : null}
                   </div>
@@ -698,39 +699,103 @@ export function ChatPanel({
   );
 }
 
-function Attachment({ path, type, name }: { path: string; type: string; name: string }) {
-  const { data: url } = useQuery({
-    queryKey: ["attachment", path],
-    queryFn: async () => {
-      const { data, error } = await supabase.storage
-        .from("chat-uploads")
-        .createSignedUrl(path, 60 * 60);
-      if (error) throw error;
-      return data.signedUrl;
-    },
-    staleTime: 50 * 60 * 1000,
-  });
+function formatSize(bytes?: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Files are fetched with the signed-in session on every load (no shareable
+// signed links), so access is re-checked against server membership each time.
+function useAttachmentBlob(path: string, enabled: boolean) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setError(false);
+    supabase.storage
+      .from("chat-uploads")
+      .download(path)
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (err || !data) {
+          setError(true);
+          return;
+        }
+        objectUrl = URL.createObjectURL(data);
+        setUrl(objectUrl);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setUrl(null);
+    };
+  }, [path, enabled]);
+  return { url, error };
+}
+
+function Attachment({
+  path,
+  type,
+  name,
+  size,
+}: {
+  path: string;
+  type: string;
+  name: string;
+  size?: number | null;
+}) {
+  const isImage = type.startsWith("image/");
+  const isVideo = type.startsWith("video/");
+  // Images load automatically; videos and other files load only when asked for.
+  const [requested, setRequested] = useState(isImage);
+  const { url, error } = useAttachmentBlob(path, requested);
+  const sizeLabel = formatSize(size);
+
+  if (error) {
+    return <p className="mt-2 text-xs text-muted-foreground">Attachment unavailable</p>;
+  }
+
+  if (!requested) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRequested(true)}
+        className="mt-2 inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs underline"
+      >
+        <Paperclip className="h-3.5 w-3.5" />
+        {isVideo ? "Load video" : "Open file"}: {name}
+        {sizeLabel ? <span className="text-muted-foreground no-underline">({sizeLabel})</span> : null}
+      </button>
+    );
+  }
 
   if (!url) {
-    return <p className="mt-2 text-xs text-muted-foreground">Loading attachment…</p>;
+    return (
+      <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading attachment…
+      </p>
+    );
   }
-  if (type.startsWith("image/")) {
+  if (isImage) {
     return (
       <a href={url} target="_blank" rel="noreferrer" className="mt-2 block">
         <img
           src={url}
           alt={name}
-          loading="lazy"
           className="max-h-80 max-w-full rounded-lg border border-border object-contain"
         />
       </a>
     );
   }
-  if (type.startsWith("video/")) {
+  if (isVideo) {
     return (
       <video
         src={url}
         controls
+        autoPlay
         className="mt-2 max-h-80 max-w-full rounded-lg border border-border"
       />
     );
@@ -738,11 +803,10 @@ function Attachment({ path, type, name }: { path: string; type: string; name: st
   return (
     <a
       href={url}
-      target="_blank"
-      rel="noreferrer"
+      download={name}
       className="mt-2 inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs underline"
     >
-      <Paperclip className="h-3.5 w-3.5" /> {name}
+      <Paperclip className="h-3.5 w-3.5" /> Save {name}
     </a>
   );
 }
