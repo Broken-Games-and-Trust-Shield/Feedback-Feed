@@ -8,3 +8,4 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Mention/#channel parsing lives in `src/lib/mentions.ts` (no Supabase imports) so it can be unit-tested with `bunx vitest run --dir src/lib`; `data.ts` re-exports it.
