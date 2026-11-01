@@ -25,6 +25,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "./UserAvatar";
 import { ProfileCard } from "./ProfileCard";
+import { StatusDot } from "./StatusDot";
 import { ReportDialog } from "./ReportDialog";
 import {
   fetchMessages,
@@ -456,6 +457,7 @@ export function ChatPanel({
                           <MessageText
                             content={m.content}
                             byName={byName}
+                            members={Object.values(memberProfilesQuery.data ?? {})}
                             channels={channels}
                             categories={categories}
                             onOpenChannel={onOpenChannel}
@@ -787,12 +789,14 @@ function TypingLine({ names }: { names: string[] }) {
 function MessageText({
   content,
   byName,
+  members,
   channels,
   categories,
   onOpenChannel,
 }: {
   content: string;
   byName: Record<string, Profile>;
+  members: Profile[];
   channels: Channel[];
   categories: ChannelCategory[];
   onOpenChannel?: ((id: string) => void) | undefined;
@@ -807,11 +811,7 @@ function MessageText({
       {parts.map((part, i) => {
         if (typeof part === "string") return <span key={i}>{part}</span>;
         if (part.kind === "everyone") {
-          return (
-            <span key={i} className="rounded bg-primary/15 px-1 font-medium text-primary">
-              @everyone
-            </span>
-          );
+          return <EveryoneCard key={i} members={members} />;
         }
         if (part.kind === "channel") {
           const c = channels.find((x) => x.name.toLowerCase() === part.name.toLowerCase());
@@ -841,6 +841,57 @@ function MessageText({
         );
       })}
     </>
+  );
+}
+
+function EveryoneCard({ members }: { members: Profile[] }) {
+  const sorted = [...members].sort((a, b) => a.username.localeCompare(b.username));
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="rounded bg-primary/15 px-1 font-medium text-primary hover:bg-primary/25"
+        >
+          @everyone
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary">
+            <Megaphone className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="font-display text-sm font-semibold">@everyone</p>
+            <p className="text-xs text-muted-foreground">
+              {sorted.length} {sorted.length === 1 ? "member" : "members"} in this server
+            </p>
+          </div>
+        </div>
+        <ul className="max-h-72 overflow-y-auto py-1">
+          {sorted.map((p) => (
+            <li key={p.id}>
+              <ProfileCard profile={p}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-accent"
+                >
+                  <span className="relative shrink-0">
+                    <UserAvatar name={p.username} url={p.avatar_url} className="h-7 w-7" />
+                    <StatusDot
+                      userId={p.id}
+                      status={p.status}
+                      className="h-3 w-3 [&>svg]:h-3 [&>svg]:w-3"
+                    />
+                  </span>
+                  <span className="truncate">{p.username}</span>
+                </button>
+              </ProfileCard>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 

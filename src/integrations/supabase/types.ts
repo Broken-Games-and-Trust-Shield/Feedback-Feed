@@ -521,6 +521,13 @@ export type Database = {
           unread: number
         }[]
       }
+      unread_server_totals: {
+        Args: never
+        Returns: {
+          server_id: string
+          unread: number
+        }[]
+      }
       user_id_by_username: { Args: { _username: string }; Returns: string }
     }
     Enums: {
