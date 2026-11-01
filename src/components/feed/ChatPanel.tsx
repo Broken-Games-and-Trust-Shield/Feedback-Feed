@@ -745,7 +745,7 @@ function Attachment({
   path: string;
   type: string;
   name: string;
-  size?: number | null;
+  size?: number | null | undefined;
 }) {
   const isImage = type.startsWith("image/");
   const isVideo = type.startsWith("video/");
