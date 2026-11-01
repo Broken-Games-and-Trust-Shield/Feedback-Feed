@@ -618,7 +618,7 @@ export function ChatPanel({
                         ) : (
                           <Hash className="h-4 w-4 text-muted-foreground" />
                         )}
-                        <span className="truncate">{sug.icon === "everyone" ? "@everyone" : sug.label}</span>
+                        <span className={sug.icon === "everyone" ? "shrink-0" : "truncate"}>{sug.icon === "everyone" ? "@everyone" : sug.label}</span>
                         {sug.hint ? (
                           <span className="ml-auto truncate text-xs text-muted-foreground">{sug.hint}</span>
                         ) : null}
