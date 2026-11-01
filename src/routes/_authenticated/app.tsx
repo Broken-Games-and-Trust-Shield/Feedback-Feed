@@ -258,7 +258,7 @@ function AppPage() {
            const ping = {
              id: (payload.new as { id: string }).id,
              author,
-             kind: repliedToMe ? "replied to you" : "mentioned you",
+             kind: repliedToMe ? "replied to you" : mentionsUser(msg.content ?? "", "") ? "mentioned @everyone" : "mentioned you",
              channelName: chName,
              channelId: msg.channel_id,
              preview: (msg.content ?? "").slice(0, 140),
@@ -319,7 +319,7 @@ function AppPage() {
       const pingsNew = hits.slice(-4).map((m) => ({
         id: m.id,
         author: names[m.user_id]?.username ?? "Someone",
-        kind: m.reply_to_id && mine.has(m.reply_to_id) ? "replied to you" : "mentioned you",
+        kind: m.reply_to_id && mine.has(m.reply_to_id) ? "replied to you" : mentionsUser(m.content ?? "", "") ? "mentioned @everyone" : "mentioned you",
         channelName: chans.find((c) => c.id === m.channel_id)?.name ?? "",
         channelId: m.channel_id,
         preview: (m.content ?? "").slice(0, 140),
