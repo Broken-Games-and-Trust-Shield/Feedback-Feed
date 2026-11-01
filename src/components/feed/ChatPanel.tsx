@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CornerUpLeft, Flag, Lock, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
+import { CornerUpLeft, Flag, Hash, Lock, Megaphone, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   fetchMessages,
   fetchProfiles,
   type Channel,
+  type ChannelCategory,
   type Message,
   type Profile,
   splitMentions,
@@ -44,8 +45,14 @@ export function ChatPanel({
   slowmodeExempt = false,
   memberIds = [],
   isOperator = false,
+  channels = [],
+  categories = [],
+  onOpenChannel,
 }: {
   isOperator?: boolean;
+  channels?: Channel[];
+  categories?: ChannelCategory[];
+  onOpenChannel?: (id: string) => void;
   channel: Channel;
   meId: string;
   canChat: boolean;
@@ -162,16 +169,64 @@ export function ChatPanel({
   };
 
   const mentionQuery = /(?:^|\s)@([^@\n]{0,40})$/.exec(text)?.[1];
-  const mentionMatches =
-    mentionQuery === undefined
-      ? []
-      : Object.values(memberProfilesQuery.data ?? {})
-          .filter(
-            (p) => p.id !== meId && p.username.toLowerCase().startsWith(mentionQuery.toLowerCase()),
-          )
-          .slice(0, 6);
-  const insertMention = (username: string) => {
-    setText((t) => t.replace(/@([^@\n]{0,40})$/, `@${username} `));
+  const channelQuery = /(?:^|\s)#([^\s#]{0,40})$/.exec(text)?.[1];
+  type Suggestion = { key: string; label: string; insert: string; avatar?: Profile; icon?: "everyone" | "channel"; hint?: string };
+  const suggestions: Suggestion[] =
+    channelQuery !== undefined
+      ? channels
+          .filter((c) => c.name.toLowerCase().startsWith(channelQuery.toLowerCase()))
+          .slice(0, 6)
+          .map((c) => ({ key: c.id, label: c.name, insert: `#${c.name} `, icon: "channel" as const }))
+      : mentionQuery === undefined
+        ? []
+        : [
+            ...("everyone".startsWith(mentionQuery.toLowerCase())
+              ? [{ key: "everyone", label: "everyone", insert: "@everyone ", icon: "everyone" as const, hint: "Notify everyone in this server" }]
+              : []),
+            ...Object.values(memberProfilesQuery.data ?? {})
+              .filter(
+                (p) => p.id !== meId && p.username.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+              )
+              .slice(0, 6)
+              .map((p) => ({ key: p.id, label: p.username, insert: `@${p.username} `, avatar: p })),
+          ];
+  const insertSuggestion = (sug: Suggestion) => {
+    setText((t) =>
+      sug.icon === "channel"
+        ? t.replace(/#([^\s#]{0,40})$/, sug.insert)
+        : t.replace(/@([^@\n]{0,40})$/, sug.insert),
+    );
+  };
+
+  // Typing indicator: shared broadcast room per channel
+  const typingRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSent = useRef(0);
+  const [typers, setTypers] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const ch = supabase.channel(`typing:${channel.id}`, { config: { broadcast: { self: false } } });
+    ch.on("broadcast", { event: "typing" }, ({ payload }) => {
+      const p = payload as { user_id?: string; stop?: boolean } | undefined;
+      if (!p?.user_id || p.user_id === meId) return;
+      const uid = p.user_id;
+      setTypers((t) => {
+        const n = { ...t };
+        if (p.stop) delete n[uid];
+        else n[uid] = Date.now() + 4000;
+        return n;
+      });
+    }).subscribe();
+    typingRef.current = ch;
+    return () => {
+      typingRef.current = null;
+      supabase.removeChannel(ch);
+    };
+  }, [channel.id, meId]);
+  const sendTyping = (stop = false) => {
+    const ch = typingRef.current;
+    if (!ch) return;
+    if (!stop && Date.now() - lastTypingSent.current < 2000) return;
+    lastTypingSent.current = stop ? 0 : Date.now();
+    void ch.send({ type: "broadcast", event: "typing", payload: { user_id: meId, stop } });
   };
 
   useEffect(() => {
@@ -202,6 +257,10 @@ export function ChatPanel({
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const typingNames = Object.entries(typers)
+    .filter(([id, until]) => until > now && allProfiles[id])
+    .map(([id]) => allProfiles[id]!.username);
 
   const slowmode = channel.slowmode_seconds ?? 0;
   const lastMine = [...messages].reverse().find((m) => m.user_id === meId);
@@ -255,6 +314,7 @@ export function ChatPanel({
       if (error) throw error;
     },
     onSuccess: () => {
+      sendTyping(true);
       setText("");
       setFile(null);
       setReplyTo(null);
@@ -393,7 +453,13 @@ export function ChatPanel({
                         {m.is_removed ? (
                           "[message removed]"
                         ) : (
-                          <MessageText content={m.content} byName={byName} />
+                          <MessageText
+                            content={m.content}
+                            byName={byName}
+                            channels={channels}
+                            categories={categories}
+                            onOpenChannel={onOpenChannel}
+                          />
                         )}
                       </p>
                     ) : null}
@@ -451,7 +517,10 @@ export function ChatPanel({
         ) : null}
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="relative border-t border-border p-4">
+        {typingNames.length > 0 ? (
+          <TypingLine names={typingNames} />
+        ) : null}
         {canChat ? (
           <form
             className="space-y-2"
@@ -528,27 +597,42 @@ export function ChatPanel({
                 </>
               ) : null}
               <div className="relative flex-1">
-                {mentionMatches.length > 0 ? (
-                  <div className="absolute bottom-full left-0 z-20 mb-2 w-64 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
-                    {mentionMatches.map((p) => (
+                {suggestions.length > 0 ? (
+                  <div className="absolute bottom-full left-0 z-20 mb-2 w-72 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                    {suggestions.map((sug) => (
                       <button
-                        key={p.id}
+                        key={sug.key}
                         type="button"
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          insertMention(p.username);
+                          insertSuggestion(sug);
                         }}
                       >
-                        <UserAvatar name={p.username} url={p.avatar_url} className="h-6 w-6" />
-                        {p.username}
+                        {sug.avatar ? (
+                          <UserAvatar name={sug.avatar.username} url={sug.avatar.avatar_url} className="h-6 w-6" />
+                        ) : sug.icon === "everyone" ? (
+                          <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-primary">
+                            <Megaphone className="h-3.5 w-3.5" />
+                          </span>
+                        ) : (
+                          <Hash className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className={sug.icon === "everyone" ? "shrink-0" : "truncate"}>{sug.icon === "everyone" ? "@everyone" : sug.label}</span>
+                        {sug.hint ? (
+                          <span className="ml-auto truncate text-xs text-muted-foreground">{sug.hint}</span>
+                        ) : null}
                       </button>
                     ))}
                   </div>
                 ) : null}
                 <Input
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    if (e.target.value.trim()) sendTyping();
+                    else sendTyping(true);
+                  }}
                   placeholder={
                     waiting ? `Slow mode: wait ${cooldownLeft}s` : `Message #${channel.name}`
                   }
@@ -677,17 +761,71 @@ function ReplyQuote({ target, name, onClick }: { target: Message | undefined; na
   );
 }
 
-function MessageText({ content, byName }: { content: string; byName: Record<string, Profile> }) {
+function TypingLine({ names }: { names: string[] }) {
+  const label =
+    names.length === 1
+      ? <><span className="font-semibold text-foreground">{names[0]}</span> is typing</>
+      : names.length === 2
+        ? <><span className="font-semibold text-foreground">{names[0]}</span> and <span className="font-semibold text-foreground">{names[1]}</span> are typing</>
+        : <>Several people are typing</>;
+  return (
+    <div className="absolute -top-6 left-6 flex items-center gap-1 text-xs text-muted-foreground" aria-live="polite">
+      <span className="truncate">{label}</span>
+      <span className="ml-0.5 inline-flex items-end gap-0.5" aria-hidden="true">
+        {[0, 150, 300].map((d) => (
+          <span
+            key={d}
+            className="h-1 w-1 animate-bounce rounded-full bg-muted-foreground"
+            style={{ animationDelay: `${d}ms` }}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function MessageText({
+  content,
+  byName,
+  channels,
+  categories,
+  onOpenChannel,
+}: {
+  content: string;
+  byName: Record<string, Profile>;
+  channels: Channel[];
+  categories: ChannelCategory[];
+  onOpenChannel?: ((id: string) => void) | undefined;
+}) {
   const parts = splitMentions(
     content,
     Object.values(byName).map((p) => p.username),
+    channels.map((c) => c.name),
   );
   return (
     <>
       {parts.map((part, i) => {
         if (typeof part === "string") return <span key={i}>{part}</span>;
+        if (part.kind === "everyone") {
+          return (
+            <span key={i} className="rounded bg-primary/15 px-1 font-medium text-primary">
+              @everyone
+            </span>
+          );
+        }
+        if (part.kind === "channel") {
+          const c = channels.find((x) => x.name.toLowerCase() === part.name.toLowerCase());
+          if (!c) return <span key={i}>#{part.name}</span>;
+          return (
+            <ChannelCard
+              key={i}
+              channel={c}
+              tab={categories.find((t) => t.id === c.category_id)?.name ?? null}
+              onOpen={onOpenChannel}
+            />
+          );
+        }
         const p = byName[part.name.toLowerCase()];
-        const trail = "";
         if (!p) return <span key={i}>@{part.name}</span>;
         return (
           <span key={i}>
@@ -699,10 +837,67 @@ function MessageText({ content, byName }: { content: string; byName: Record<stri
                 @{p.username}
               </button>
             </ProfileCard>
-            {trail}
           </span>
         );
       })}
     </>
+  );
+}
+
+function ChannelCard({
+  channel,
+  tab,
+  onOpen,
+}: {
+  channel: Channel;
+  tab: string | null;
+  onOpen?: ((id: string) => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const facts: string[] = [];
+  if (channel.is_restricted) facts.push(channel.operator_only ? "Only the operator can post" : "Only chosen members can post");
+  else facts.push("Everyone can post");
+  if (channel.slowmode_seconds > 0) facts.push(`Slow mode: ${channel.slowmode_seconds}s`);
+  if (channel.allow_uploads) facts.push("Photos & videos allowed");
+  if (channel.allow_replies) facts.push("Replies on");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="rounded bg-primary/15 px-1 font-medium text-primary hover:bg-primary/25"
+        >
+          #{channel.name}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-4" align="start">
+        <div className="flex items-center gap-2">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface">
+            {channel.is_restricted ? <Lock className="h-5 w-5 text-muted-foreground" /> : <Hash className="h-5 w-5 text-muted-foreground" />}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-display font-semibold">#{channel.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{tab ? `In ${tab}` : "Other chats"}</p>
+          </div>
+        </div>
+        <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+          {facts.map((f) => (
+            <li key={f}>• {f}</li>
+          ))}
+        </ul>
+        {onOpen ? (
+          <Button
+            size="sm"
+            className="mt-3 w-full"
+            onClick={() => {
+              setOpen(false);
+              onOpen(channel.id);
+            }}
+          >
+            Open channel
+          </Button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
