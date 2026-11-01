@@ -795,7 +795,7 @@ function MessageText({
   byName: Record<string, Profile>;
   channels: Channel[];
   categories: ChannelCategory[];
-  onOpenChannel?: (id: string) => void;
+  onOpenChannel?: ((id: string) => void) | undefined;
 }) {
   const parts = splitMentions(
     content,
@@ -851,7 +851,7 @@ function ChannelCard({
 }: {
   channel: Channel;
   tab: string | null;
-  onOpen?: (id: string) => void;
+  onOpen?: ((id: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const facts: string[] = [];
