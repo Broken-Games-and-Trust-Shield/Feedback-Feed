@@ -203,6 +203,20 @@ function AppPage() {
   });
   const unread = unreadQuery.data ?? {};
 
+  const serverTotalsQuery = useQuery({
+    queryKey: ["unread-totals", meId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("unread_server_totals");
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      for (const r of (data ?? []) as { server_id: string; unread: number }[])
+        map[r.server_id] = Number(r.unread);
+      return map;
+    },
+    enabled: !!meId && servers.length > 0,
+  });
+  const serverTotals = serverTotalsQuery.data ?? {};
+
   useEffect(() => {
     if (!server) return;
     const ch = supabase
@@ -212,6 +226,7 @@ function AppPage() {
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
           qc.invalidateQueries({ queryKey: ["unread", server.id] });
+          qc.invalidateQueries({ queryKey: ["unread-totals"] });
            const msg = payload.new as { user_id?: string; content?: string; channel_id?: string; reply_to_id?: string | null };
            if (!msg || !msg.user_id || msg.user_id === meId || !msg.channel_id) return;
            const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
@@ -325,7 +340,10 @@ function AppPage() {
         { user_id: meId, channel_id: activeChannelId, last_read_at: new Date().toISOString() },
         { onConflict: "user_id,channel_id" },
       )
-      .then(() => qc.invalidateQueries({ queryKey: ["unread"] }));
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["unread"] });
+        qc.invalidateQueries({ queryKey: ["unread-totals"] });
+      });
   }, [activeChannelId, activeUnread, meId, qc]);
 
   const membersQuery = useQuery({
@@ -370,6 +388,7 @@ function AppPage() {
         activeId={activeServerId}
         onSelect={setActiveServerId}
         meId={meId}
+        totals={serverTotals}
       />
 
       <aside className="flex w-60 shrink-0 flex-col bg-surface">
@@ -519,6 +538,9 @@ function AppPage() {
               slowmodeExempt={isOwner || (isAdmin && bypassIds.includes(meId))}
               memberIds={members.map((m) => m.user_id)}
               isOperator={isOwner}
+              channels={channels}
+              categories={categories}
+              onOpenChannel={setActiveChannelId}
             />
             {server.rules_channel_id && !isOwner ? (
               <RulesGate
@@ -602,19 +624,23 @@ function ServerRail({
   activeId,
   onSelect,
   meId,
+  totals,
 }: {
   servers: { id: string; name: string }[];
   activeId: string | null;
   onSelect: (id: string) => void;
   meId: string;
+  totals: Record<string, number>;
 }) {
   return (
     <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 bg-background py-3">
-      {servers.map((s) => (
+      {servers.map((s) => {
+        const missed = s.id === activeId ? 0 : (totals[s.id] ?? 0);
+        return (
+        <div key={s.id} className="relative">
         <button
-          key={s.id}
           onClick={() => onSelect(s.id)}
-          title={s.name}
+          title={missed > 0 ? `${s.name} — ${missed} missed message${missed === 1 ? "" : "s"}` : s.name}
           className={`grid h-12 w-12 place-items-center rounded-2xl font-display text-sm font-bold transition ${
             s.id === activeId
               ? "bg-primary text-primary-foreground"
@@ -623,7 +649,14 @@ function ServerRail({
         >
           {initials(s.name)}
         </button>
-      ))}
+        {missed > 0 ? (
+          <span className="pointer-events-none absolute -bottom-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground">
+            {missed > 99 ? "99+" : missed}
+          </span>
+        ) : null}
+        </div>
+        );
+      })}
       <CreateOrJoin meId={meId} />
     </nav>
   );
