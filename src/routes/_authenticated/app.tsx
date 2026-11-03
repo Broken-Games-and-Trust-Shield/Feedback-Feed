@@ -2,7 +2,7 @@ import { startPresence } from "@/lib/presence";
 import { Pencil as PencilIcon } from "lucide-react";
 import type { Message, Profile } from "@/lib/data";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -332,18 +332,51 @@ function AppPage() {
   }, [server?.id, meId, qc]);
 
   const activeUnread = activeChannelId ? (unread[activeChannelId] ?? 0) : 0;
+  // When you open a channel, remember when you last read it (before marking it
+  // read) so the chat can draw the red "Unread" line for this visit only.
+  const [unreadSince, setUnreadSince] = useState<{ channelId: string; since: string | null | undefined } | null>(null);
+  const visitedChannelRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeChannelId || !meId) return;
-    void (supabase as any)
-      .from("channel_reads")
-      .upsert(
-        { user_id: meId, channel_id: activeChannelId, last_read_at: new Date().toISOString() },
-        { onConflict: "user_id,channel_id" },
-      )
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ["unread"] });
-        qc.invalidateQueries({ queryKey: ["unread-totals"] });
-      });
+    const channelId = activeChannelId;
+    const isNewVisit = visitedChannelRef.current !== channelId;
+    visitedChannelRef.current = channelId;
+    void (async () => {
+      if (isNewVisit) {
+        setUnreadSince({ channelId, since: undefined });
+        let since: string | null = null;
+        try {
+          const { data } = await supabase
+            .from("channel_reads")
+            .select("last_read_at")
+            .eq("user_id", meId)
+            .eq("channel_id", channelId)
+            .maybeSingle();
+          since = data?.last_read_at ?? null;
+          if (!since && server?.id) {
+            const { data: mem } = await supabase
+              .from("server_members")
+              .select("joined_at")
+              .eq("server_id", server.id)
+              .eq("user_id", meId)
+              .maybeSingle();
+            since = mem?.joined_at ?? null;
+          }
+        } catch {
+          since = null;
+        }
+        setUnreadSince((prev) => (prev?.channelId === channelId ? { channelId, since } : prev));
+      }
+      await (supabase as any)
+        .from("channel_reads")
+        .upsert(
+          { user_id: meId, channel_id: channelId, last_read_at: new Date().toISOString() },
+          { onConflict: "user_id,channel_id" },
+        );
+      qc.invalidateQueries({ queryKey: ["unread"] });
+      qc.invalidateQueries({ queryKey: ["unread-totals"] });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChannelId, activeUnread, meId, qc]);
 
   const membersQuery = useQuery({
