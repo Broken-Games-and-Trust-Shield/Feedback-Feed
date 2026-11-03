@@ -266,6 +266,13 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  useEffect(() => {
+    if (!firstUnreadId) return;
+    messageListRef.current
+      ?.querySelector<HTMLElement>('[aria-label="Unread messages"]')
+      ?.scrollIntoView({ block: "center" });
+  }, [firstUnreadId]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
