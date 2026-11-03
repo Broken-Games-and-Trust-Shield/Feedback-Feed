@@ -85,8 +85,8 @@ function Landing() {
   async function submitEmail(e: React.FormEvent) {
     e.preventDefault();
     const mail = email.trim();
-    if (!mail || password.length < 6) {
-      toast.error("Enter your email and a password of at least 6 characters.");
+    if (!mail || password.length < 8) {
+      toast.error("Enter your email and a password of at least 8 characters.");
       return;
     }
     setEmailBusy(true);
