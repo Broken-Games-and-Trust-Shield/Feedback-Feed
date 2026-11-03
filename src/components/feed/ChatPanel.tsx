@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CornerUpLeft, Flag, Hash, Lock, Megaphone, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
@@ -398,7 +398,17 @@ export function ChatPanel({
           const ownDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
           const canDelete = ownDelete || isOperator;
           return (
-            <ContextMenu key={m.id}>
+            <Fragment key={m.id}>
+            {m.id === firstUnreadId ? (
+              <div role="separator" aria-label="Unread messages" className="relative my-2 flex items-center gap-2">
+                <div className="h-px flex-1 bg-destructive" />
+                <span className="rounded-sm bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                  Unread
+                </span>
+                <div className="h-px flex-1 bg-destructive" />
+              </div>
+            ) : null}
+            <ContextMenu>
               <ContextMenuTrigger asChild>
                  <div
                    data-message-id={m.id}
@@ -517,6 +527,7 @@ export function ChatPanel({
                 )}
               </ContextMenuContent>
             </ContextMenu>
+            </Fragment>
           );
         })}
         <div ref={bottomRef} />
