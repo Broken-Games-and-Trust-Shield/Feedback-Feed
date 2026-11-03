@@ -266,12 +266,16 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // When you open a channel, jump straight to the newest message (and keep it
+  // there while photos/videos finish loading).
   useEffect(() => {
-    if (!firstUnreadId) return;
-    messageListRef.current
-      ?.querySelector<HTMLElement>('[aria-label="Unread messages"]')
-      ?.scrollIntoView({ block: "center" });
-  }, [firstUnreadId]);
+    const list = messageListRef.current;
+    if (!list || !messagesQuery.isSuccess) return;
+    const toBottom = () => { list.scrollTop = list.scrollHeight; };
+    toBottom();
+    const timers = [100, 400, 1000].map((ms) => setTimeout(toBottom, ms));
+    return () => timers.forEach(clearTimeout);
+  }, [messagesQuery.isSuccess, firstUnreadId]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
