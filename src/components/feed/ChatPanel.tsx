@@ -57,7 +57,7 @@ export function ChatPanel({
   categories?: ChannelCategory[];
   onOpenChannel?: (id: string) => void;
   /** When you last read this channel before this visit; undefined while loading. */
-  unreadSince?: string | null;
+  unreadSince?: string | null | undefined;
   channel: Channel;
   meId: string;
   canChat: boolean;
