@@ -49,11 +49,14 @@ export function ChatPanel({
   channels = [],
   categories = [],
   onOpenChannel,
+  unreadSince,
 }: {
   isOperator?: boolean;
   channels?: Channel[];
   categories?: ChannelCategory[];
   onOpenChannel?: (id: string) => void;
+  /** When you last read this channel before this visit; undefined while loading. */
+  unreadSince?: string | null;
   channel: Channel;
   meId: string;
   canChat: boolean;

@@ -580,6 +580,7 @@ function AppPage() {
               channels={channels}
               categories={categories}
               onOpenChannel={setActiveChannelId}
+              unreadSince={unreadSince?.channelId === channel.id ? unreadSince.since : undefined}
             />
             {server.rules_channel_id && !isOwner ? (
               <RulesGate
