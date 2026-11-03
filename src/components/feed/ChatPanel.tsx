@@ -37,6 +37,7 @@ import {
   splitMentions,
 } from "@/lib/data";
 import { checkMessageTone } from "@/lib/moderation.functions";
+import { firstUnreadMessageId } from "@/lib/unread";
 
 export function ChatPanel({
   channel,
@@ -83,6 +84,15 @@ export function ChatPanel({
     queryFn: () => fetchMessages(channel.id),
   });
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
+
+  // Decide once per visit where the red "Unread" line goes; it stays put while
+  // you're here and is gone next time you open the channel.
+  const [firstUnreadId, setFirstUnreadId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (firstUnreadId !== undefined || unreadSince === undefined) return;
+    if (!messagesQuery.isSuccess || messagesQuery.isFetching) return;
+    setFirstUnreadId(firstUnreadMessageId(messages, unreadSince, meId));
+  }, [firstUnreadId, unreadSince, messagesQuery.isSuccess, messagesQuery.isFetching, messages, meId]);
 
   const authorIds = useMemo(
     () => Array.from(new Set(messages.map((m) => m.user_id))),
