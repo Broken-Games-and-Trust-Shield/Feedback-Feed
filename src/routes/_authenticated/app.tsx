@@ -336,14 +336,15 @@ function AppPage() {
   // read) so the chat can draw the red "Unread" line for this visit only.
   const [unreadSince, setUnreadSince] = useState<{ channelId: string; since: string | null | undefined } | null>(null);
   const visitedChannelRef = useRef<string | null>(null);
+  const captureRef = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     if (!activeChannelId || !meId) return;
     const channelId = activeChannelId;
     const isNewVisit = visitedChannelRef.current !== channelId;
     visitedChannelRef.current = channelId;
-    void (async () => {
-      if (isNewVisit) {
-        setUnreadSince({ channelId, since: undefined });
+    if (isNewVisit) {
+      setUnreadSince({ channelId, since: undefined });
+      captureRef.current = (async () => {
         let since: string | null = null;
         try {
           const { data } = await supabase
@@ -366,7 +367,12 @@ function AppPage() {
           since = null;
         }
         setUnreadSince((prev) => (prev?.channelId === channelId ? { channelId, since } : prev));
-      }
+      })();
+    }
+    const capture = captureRef.current;
+    void (async () => {
+      // Never mark the channel read before its previous read time was captured.
+      await capture;
       await (supabase as any)
         .from("channel_reads")
         .upsert(
