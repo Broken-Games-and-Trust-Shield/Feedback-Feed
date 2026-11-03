@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CornerUpLeft, Flag, Hash, Lock, Megaphone, Loader2, Paperclip, Reply, SendHorizonal, Trash2, X } from "lucide-react";
@@ -37,6 +37,7 @@ import {
   splitMentions,
 } from "@/lib/data";
 import { checkMessageTone } from "@/lib/moderation.functions";
+import { firstUnreadMessageId } from "@/lib/unread";
 
 export function ChatPanel({
   channel,
@@ -49,11 +50,14 @@ export function ChatPanel({
   channels = [],
   categories = [],
   onOpenChannel,
+  unreadSince,
 }: {
   isOperator?: boolean;
   channels?: Channel[];
   categories?: ChannelCategory[];
   onOpenChannel?: (id: string) => void;
+  /** When you last read this channel before this visit; undefined while loading. */
+  unreadSince?: string | null | undefined;
   channel: Channel;
   meId: string;
   canChat: boolean;
@@ -80,6 +84,15 @@ export function ChatPanel({
     queryFn: () => fetchMessages(channel.id),
   });
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
+
+  // Decide once per visit where the red "Unread" line goes; it stays put while
+  // you're here and is gone next time you open the channel.
+  const [firstUnreadId, setFirstUnreadId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (firstUnreadId !== undefined || unreadSince === undefined) return;
+    if (!messagesQuery.isSuccess || messagesQuery.isFetching) return;
+    setFirstUnreadId(firstUnreadMessageId(messages, unreadSince, meId));
+  }, [firstUnreadId, unreadSince, messagesQuery.isSuccess, messagesQuery.isFetching, messages, meId]);
 
   const authorIds = useMemo(
     () => Array.from(new Set(messages.map((m) => m.user_id))),
@@ -253,6 +266,13 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  useEffect(() => {
+    if (!firstUnreadId) return;
+    messageListRef.current
+      ?.querySelector<HTMLElement>('[aria-label="Unread messages"]')
+      ?.scrollIntoView({ block: "center" });
+  }, [firstUnreadId]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -385,7 +405,17 @@ export function ChatPanel({
           const ownDelete = m.user_id === meId && secondsLeft > 0 && !m.is_removed;
           const canDelete = ownDelete || isOperator;
           return (
-            <ContextMenu key={m.id}>
+            <Fragment key={m.id}>
+            {m.id === firstUnreadId ? (
+              <div role="separator" aria-label="Unread messages" className="relative my-2 flex items-center gap-2">
+                <div className="h-px flex-1 bg-destructive" />
+                <span className="rounded-sm bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                  Unread
+                </span>
+                <div className="h-px flex-1 bg-destructive" />
+              </div>
+            ) : null}
+            <ContextMenu>
               <ContextMenuTrigger asChild>
                  <div
                    data-message-id={m.id}
@@ -504,6 +534,7 @@ export function ChatPanel({
                 )}
               </ContextMenuContent>
             </ContextMenu>
+            </Fragment>
           );
         })}
         <div ref={bottomRef} />
