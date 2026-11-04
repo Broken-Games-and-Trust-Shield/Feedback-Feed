@@ -19,7 +19,7 @@ export type UploadHandle = {
 };
 
 function resumableEndpoint() {
-  const base = import.meta.env.VITE_SUPABASE_URL as string;
+  const base = import.meta.env['VITE_SUPABASE_URL'] as string;
   const url = new URL(base);
   // Upload straight to the storage host when available — noticeably faster for large files.
   const m = url.hostname.match(/^([a-z0-9]+)\.supabase\.co$/);
@@ -73,7 +73,7 @@ export function uploadFile(
         retryDelays: [0, 1000, 3000, 5000, 10000],
         headers: {
           authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+          apikey: import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] as string,
           "x-upsert": "false",
         },
         uploadDataDuringCreation: true,
