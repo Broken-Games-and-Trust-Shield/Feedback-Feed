@@ -15,6 +15,13 @@
       "when": 1788829357556,
       "tag": "0001_reports_and_invite_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793761801091,
+      "tag": "0002_raise_attachment_limit_1gb",
+      "breakpoints": true
     }
   ]
 }
