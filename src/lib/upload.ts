@@ -113,7 +113,8 @@ export function formatEta(remainingBytes: number, speed: number): string {
   if (s < 60) return `about ${Math.ceil(s / 10) * 10}s left`;
   const m = Math.round(s / 60);
   if (m < 60) return `about ${m} min left`;
-  const h = Math.floor(m / 60);
-  const rm = Math.round((m % 60) / 15) * 15;
+  const rounded = Math.round(m / 15) * 15;
+  const h = Math.floor(rounded / 60);
+  const rm = rounded % 60;
   return rm ? `about ${h} h ${rm} min left` : `about ${h} h left`;
 }
