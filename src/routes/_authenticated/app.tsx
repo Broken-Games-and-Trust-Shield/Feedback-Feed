@@ -125,10 +125,38 @@ function AppPage() {
     enabled: !!server,
   });
   const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  // Closed tabs are remembered per account in this browser, so they stay closed
+  // after leaving the site or logging out and back in.
   const [collapsedTabs, setCollapsedTabs] = useState<string[]>([]);
+  const collapsedLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!meId) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`ff-collapsed-tabs-${meId}`) ?? "[]");
+      setCollapsedTabs(Array.isArray(saved) ? saved.filter((x): x is string => typeof x === "string") : []);
+    } catch {
+      setCollapsedTabs([]);
+    }
+    collapsedLoadedRef.current = meId;
+  }, [meId]);
+  useEffect(() => {
+    if (!meId || collapsedLoadedRef.current !== meId) return;
+    localStorage.setItem(`ff-collapsed-tabs-${meId}`, JSON.stringify(collapsedTabs.slice(-500)));
+  }, [collapsedTabs, meId]);
   const [pings, setPings] = useState<
-    { id: string; author: string; kind: string; channelName: string; channelId: string; preview: string }[]
+    {
+      id: string;
+      author: string;
+      kind: string;
+      channelName: string;
+      channelId: string;
+      serverId: string;
+      serverName: string;
+      preview: string;
+    }[]
   >([]);
+  // Channel to open once the target server's channels have loaded (used by mention pop-ups).
+  const pendingChannelRef = useRef<string | null>(null);
   const bypassQuery = useQuery({
     queryKey: ["slowmode-bypass", activeChannelId],
     queryFn: async () => {
@@ -143,9 +171,20 @@ function AppPage() {
   const bypassIds = bypassQuery.data ?? [];
 
   useEffect(() => {
+    const pending = pendingChannelRef.current;
+    if (pending) {
+      if (channels.some((c) => c.id === pending)) {
+        pendingChannelRef.current = null;
+        if (activeChannelId !== pending) setActiveChannelId(pending);
+        return;
+      }
+      // Still switching servers / loading that server's channels — wait.
+      if (!channelsQuery.isSuccess || channels.some((c) => c.server_id !== activeServerId)) return;
+      pendingChannelRef.current = null;
+    }
     if (channels.length === 0) setActiveChannelId(null);
     else if (!channels.some((c) => c.id === activeChannelId)) setActiveChannelId(channels[0]!.id);
-  }, [channels, activeChannelId]);
+  }, [channels, activeChannelId, activeServerId, channelsQuery.isSuccess]);
 
   const channel = channels.find((c) => c.id === activeChannelId) ?? null;
 
@@ -230,8 +269,24 @@ function AppPage() {
            const msg = payload.new as { user_id?: string; content?: string; channel_id?: string; reply_to_id?: string | null };
            if (!msg || !msg.user_id || msg.user_id === meId || !msg.channel_id) return;
            const chans = qc.getQueryData<Channel[]>(["channels", server.id]) ?? [];
-           const chName = chans.find((c) => c.id === msg.channel_id)?.name;
-           if (!chName) return;
+           let chName = chans.find((c) => c.id === msg.channel_id)?.name;
+           let pingServerId = server.id;
+           let pingServerName = server.name;
+           if (!chName) {
+             // Message in another server you're in.
+             const { data: other } = await supabase
+               .from("channels")
+               .select("name, server_id")
+               .eq("id", msg.channel_id)
+               .maybeSingle();
+             const otherServer = (qc.getQueryData<{ id: string; name: string }[]>(["servers", meId]) ?? []).find(
+               (s) => s.id === other?.server_id,
+             );
+             if (!other || !otherServer) return;
+             chName = other.name;
+             pingServerId = otherServer.id;
+             pingServerName = otherServer.name;
+           }
           const me = await qc.fetchQuery({
             queryKey: ["profile", meId],
             queryFn: () => fetchProfile(meId),
@@ -261,6 +316,8 @@ function AppPage() {
              kind: repliedToMe ? "replied to you" : mentionsUser(msg.content ?? "", "") ? "mentioned @everyone" : "mentioned you",
              channelName: chName,
              channelId: msg.channel_id,
+             serverId: pingServerId,
+             serverName: pingServerName,
              preview: (msg.content ?? "").slice(0, 140),
            };
            setPings((x) => [...x.filter((y) => y.id !== ping.id), ping].slice(-4));
@@ -322,6 +379,8 @@ function AppPage() {
         kind: m.reply_to_id && mine.has(m.reply_to_id) ? "replied to you" : mentionsUser(m.content ?? "", "") ? "mentioned @everyone" : "mentioned you",
         channelName: chans.find((c) => c.id === m.channel_id)?.name ?? "",
         channelId: m.channel_id,
+        serverId: server.id,
+        serverName: server.name,
         preview: (m.content ?? "").slice(0, 140),
       }));
       for (const h of hits) seen.add(h.id);
@@ -629,6 +688,9 @@ function AppPage() {
               <p className="text-sm">
                 <span className="font-semibold">{p.author}</span> {p.kind} in{" "}
                 <span className="font-semibold">#{p.channelName}</span>
+                {p.serverId !== activeServerId ? (
+                  <span className="text-muted-foreground"> · {p.serverName}</span>
+                ) : null}
               </p>
               {p.preview ? (
                 <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.preview}</p>
@@ -637,6 +699,10 @@ function AppPage() {
                 <Button
                   size="sm"
                   onClick={() => {
+                    if (p.serverId !== activeServerId) {
+                      pendingChannelRef.current = p.channelId;
+                      setActiveServerId(p.serverId);
+                    }
                     setActiveChannelId(p.channelId);
                     setPings((x) => x.filter((y) => y.id !== p.id));
                   }}
