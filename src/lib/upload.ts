@@ -34,17 +34,17 @@ export function uploadFile(
   onProgress: (p: UploadProgress) => void,
 ): UploadHandle {
   const contentType = file.type || "application/octet-stream";
+  // Speed is the average since the upload started, recalculated at most every 2 seconds,
+  // so the shown speed and time left stay steady instead of jumping with every chunk.
   let speed = 0;
-  let lastT = performance.now();
-  let lastLoaded = 0;
+  const startT = performance.now();
+  let lastCalc = 0;
   const report = (loaded: number) => {
     const t = performance.now();
-    const dt = (t - lastT) / 1000;
-    if (dt > 0.25) {
-      const inst = (loaded - lastLoaded) / dt;
-      speed = speed ? speed * 0.7 + inst * 0.3 : inst;
-      lastT = t;
-      lastLoaded = loaded;
+    const elapsed = (t - startT) / 1000;
+    if (elapsed > 1 && (speed === 0 || t - lastCalc > 2000)) {
+      speed = loaded / elapsed;
+      lastCalc = t;
     }
     onProgress({ loaded, total: file.size, speed });
   };
@@ -108,8 +108,12 @@ export function uploadFile(
 
 export function formatEta(remainingBytes: number, speed: number): string {
   if (!speed || speed <= 0) return "calculating…";
-  const s = Math.ceil(remainingBytes / speed);
-  if (s < 60) return `${s}s left`;
-  const m = Math.floor(s / 60);
-  return `${m}m ${s % 60}s left`;
+  const s = remainingBytes / speed;
+  if (s < 10) return "a few seconds left";
+  if (s < 60) return `about ${Math.ceil(s / 10) * 10}s left`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `about ${m} min left`;
+  const h = Math.floor(m / 60);
+  const rm = Math.round((m % 60) / 15) * 15;
+  return rm ? `about ${h} h ${rm} min left` : `about ${h} h left`;
 }
