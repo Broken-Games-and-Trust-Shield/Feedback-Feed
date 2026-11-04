@@ -38,6 +38,7 @@ import {
 } from "@/lib/data";
 import { checkMessageTone } from "@/lib/moderation.functions";
 import { firstUnreadMessageId } from "@/lib/unread";
+import { MAX_UPLOAD_BYTES, formatEta, uploadFile, type UploadProgress } from "@/lib/upload";
 
 export function ChatPanel({
   channel,
@@ -298,6 +299,8 @@ export function ChatPanel({
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const cancelUploadRef = useRef<(() => void) | null>(null);
 
   const send = useMutation({
     mutationFn: async ({ content, upload }: { content: string; upload: File | null }) => {
@@ -309,15 +312,14 @@ export function ChatPanel({
       } | null = null;
 
       if (upload) {
-        if (upload.size > 1024 * 1024 * 1024) throw new Error("That file is bigger than 1 GB.");
+        if (upload.size > MAX_UPLOAD_BYTES) throw new Error("That file is bigger than 1 GB.");
         setUploading(true);
         try {
           const ext = upload.name.includes(".") ? upload.name.split(".").pop() : "bin";
           const path = `${channel.id}/${meId}/${crypto.randomUUID()}.${ext}`;
-          const { error: upErr } = await supabase.storage
-            .from("chat-uploads")
-            .upload(path, upload, { contentType: upload.type || "application/octet-stream" });
-          if (upErr) throw upErr;
+          const handle = uploadFile("chat-uploads", path, upload, setProgress);
+          cancelUploadRef.current = handle.cancel;
+          await handle.promise;
           attachment = {
             attachment_url: path,
             attachment_type: upload.type || "application/octet-stream",
@@ -326,6 +328,8 @@ export function ChatPanel({
           };
         } finally {
           setUploading(false);
+          setProgress(null);
+          cancelUploadRef.current = null;
         }
       }
 
@@ -592,17 +596,38 @@ export function ChatPanel({
                 <Paperclip className="h-3.5 w-3.5" />
                 <span className="truncate">{file.name}</span>
                 <span>({(file.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                {uploading && progress ? (
+                  <span className="ml-auto shrink-0 tabular-nums">
+                    {Math.floor((progress.loaded / Math.max(1, progress.total)) * 100)}%
+                    {progress.speed > 0
+                      ? ` · ${(progress.speed / (1024 * 1024)).toFixed(1)} MB/s · ${formatEta(progress.total - progress.loaded, progress.speed)}`
+                      : ""}
+                  </span>
+                ) : null}
                 <button
                   type="button"
-                  className="ml-auto hover:text-destructive"
+                  className={`${uploading && progress ? "" : "ml-auto "}hover:text-destructive`}
                   onClick={() => {
+                    if (uploading) {
+                      cancelUploadRef.current?.();
+                      return;
+                    }
                     setFile(null);
                     if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
-                  aria-label="Remove attachment"
+                  aria-label={uploading ? "Cancel upload" : "Remove attachment"}
+                  title={uploading ? "Cancel upload" : "Remove attachment"}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
+              </div>
+            ) : null}
+            {uploading && progress ? (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                <div
+                  className="h-full bg-primary transition-[width] duration-200"
+                  style={{ width: `${(progress.loaded / Math.max(1, progress.total)) * 100}%` }}
+                />
               </div>
             ) : null}
             <div className="flex gap-2">
@@ -615,7 +640,7 @@ export function ChatPanel({
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
-                      if (f && f.size > 1024 * 1024 * 1024) {
+                      if (f && f.size > MAX_UPLOAD_BYTES) {
                         toast.error("Photos and videos must be 1 GB or smaller.");
                         e.target.value = "";
                         return;

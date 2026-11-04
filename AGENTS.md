@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 - Mention/#channel parsing lives in `src/lib/mentions.ts` (no Supabase imports) so it can be unit-tested with `bunx vitest run --dir src/lib`; `data.ts` re-exports it.
 - The red "Unread" divider uses the channel's previous read time, captured in app.tsx before the channel is marked read and frozen per visit in ChatPanel; the logic lives in `src/lib/unread.ts` (tested with `bunx vitest run --dir src/lib`).
+- Chat uploads go through `src/lib/upload.ts`: files over 6 MB use resumable chunked (TUS) uploads straight to the storage host, because single-request uploads of large videos time out.
