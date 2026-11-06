@@ -106,7 +106,7 @@ export function ReportsInbox({ serverId }: { serverId: string }) {
           ) : null}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Reports</DialogTitle>
           <DialogDescription>What members have flagged in this server.</DialogDescription>
