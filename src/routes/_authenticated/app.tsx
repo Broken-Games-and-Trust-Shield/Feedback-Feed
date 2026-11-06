@@ -812,7 +812,7 @@ function CreateOrJoin({ meId }: { meId: string }) {
           <Plus className="h-5 w-5" />
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a server</DialogTitle>
           <DialogDescription>Start your own space or join one with a code.</DialogDescription>
@@ -929,7 +929,7 @@ function NewChannel({ serverId }: { serverId: string }) {
           <Plus className="h-4 w-4" /> New channel
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New channel</DialogTitle>
         </DialogHeader>
@@ -1112,7 +1112,7 @@ function ChannelSettings({
           <Settings className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1">
             #{channel.name} settings
@@ -1338,7 +1338,7 @@ function InviteDialog({ serverId, inviteCode }: { serverId: string; inviteCode: 
           <UserPlus className="h-4 w-4" /> Invite
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Invite people</DialogTitle>
           <DialogDescription>Share a link or invite an account directly.</DialogDescription>
@@ -1573,7 +1573,7 @@ function NewTab({ serverId }: { serverId: string }) {
           <FolderPlus className="h-4 w-4" /> New tab
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New tab</DialogTitle>
           <DialogDescription>
@@ -1654,7 +1654,7 @@ function TabMenu({ category }: { category: ChannelCategory }) {
           <Pencil className="h-3.5 w-3.5" />
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{category.name}</DialogTitle>
           <DialogDescription>Rename this tab or remove it.</DialogDescription>
@@ -1713,7 +1713,7 @@ function RenameDialog({
           <PencilIcon className="h-3.5 w-3.5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Pick a new name.</DialogDescription>
